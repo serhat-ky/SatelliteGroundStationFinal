@@ -10,8 +10,8 @@ using LiveChartsCore;
 using LiveChartsCore.SkiaSharpView;
 using LiveChartsCore.SkiaSharpView.Painting;
 using SkiaSharp;
-using SatelliteGroundStation.Services;
 using System.Windows.Media.Imaging;
+using LiveChartsCore.Kernel;
 
 namespace SatelliteGroundStation.ViewModels
 {
@@ -110,11 +110,12 @@ namespace SatelliteGroundStation.ViewModels
             {
                 new LineSeries<DataPoint>
                 {
-                    Values = TemperatureData,
-                    Name = "Sıcaklık (°C)",
-                    Stroke = new SolidColorPaint(SKColors.Red) { StrokeThickness = 2 },
-                    Fill = null,
-                    GeometrySize = 0
+                   Values = TemperatureData,
+                   Name = "Sıcaklık (°C)",
+                   Stroke = new SolidColorPaint(SKColors.Red) { StrokeThickness = 2 },
+                   Fill = null,
+                   GeometrySize = 0,
+                   Mapping = (point, index) => new Coordinate(point.Time.Ticks, point.Value)
                 }
             };
 
@@ -126,7 +127,8 @@ namespace SatelliteGroundStation.ViewModels
                     Name = "Basınç (Pa)",
                     Stroke = new SolidColorPaint(SKColors.Blue) { StrokeThickness = 2 },
                     Fill = null,
-                    GeometrySize = 0
+                    GeometrySize = 0,
+                    Mapping = (point, index) => new Coordinate(point.Time.Ticks, point.Value)
                 }
             };
 
@@ -138,7 +140,8 @@ namespace SatelliteGroundStation.ViewModels
                     Name = "Hız (m/s)",
                     Stroke = new SolidColorPaint(SKColors.Green) { StrokeThickness = 2 },
                     Fill = null,
-                    GeometrySize = 0
+                    GeometrySize = 0,
+                    Mapping = (point, index) => new Coordinate(point.Time.Ticks, point.Value)
                 }
             };
 
@@ -150,7 +153,8 @@ namespace SatelliteGroundStation.ViewModels
                     Name = "Pil Gerilimi (V)",
                     Stroke = new SolidColorPaint(SKColors.Orange) { StrokeThickness = 2 },
                     Fill = null,
-                    GeometrySize = 0
+                    GeometrySize = 0,
+                    Mapping = (point, index) => new Coordinate(point.Time.Ticks, point.Value)
                 }
             };
 
@@ -162,15 +166,17 @@ namespace SatelliteGroundStation.ViewModels
                     Name = "Gyro X",
                     Stroke = new SolidColorPaint(SKColors.Red) { StrokeThickness = 2 },
                     Fill = null,
-                    GeometrySize = 0
+                    GeometrySize = 0,
+                    Mapping = (point, index) => new Coordinate(point.Time.Ticks, point.Value)
                 },
                 new LineSeries<DataPoint>
                 {
-                    Values = GyroYData,
-                    Name = "Gyro Y",
-                    Stroke = new SolidColorPaint(SKColors.Green) { StrokeThickness = 2 },
-                    Fill = null,
-                    GeometrySize = 0
+                     Values = GyroYData,
+                     Name = "Gyro Y",
+                     Stroke = new SolidColorPaint(SKColors.Green) { StrokeThickness = 2 },
+                     Fill = null,
+                     GeometrySize = 0,
+                     Mapping = (point, index) => new Coordinate(point.Time.Ticks, point.Value)
                 },
                 new LineSeries<DataPoint>
                 {
@@ -178,7 +184,8 @@ namespace SatelliteGroundStation.ViewModels
                     Name = "Gyro Z",
                     Stroke = new SolidColorPaint(SKColors.Blue) { StrokeThickness = 2 },
                     Fill = null,
-                    GeometrySize = 0
+                    GeometrySize = 0,
+                    Mapping = (point, index) => new Coordinate(point.Time.Ticks, point.Value)
                 }
             };
 
@@ -392,6 +399,29 @@ namespace SatelliteGroundStation.ViewModels
             set => SetProperty(ref _gpsLongitude, value);
         }
 
+        public LiveChartsCore.SkiaSharpView.Axis[] XAxes { get; } = new[]
+        {
+           new LiveChartsCore.SkiaSharpView.Axis
+    {
+        Name = "Zaman",
+        LabelsRotation = 0,
+        TextSize = 10,
+        LabelsPaint = new SolidColorPaint(SKColors.LightGray),
+        UnitWidth = TimeSpan.FromMinutes(1).Ticks,
+        MinStep = TimeSpan.FromMinutes(5).Ticks,
+        Labeler = value => new DateTime((long)value).ToString("HH:mm")
+    }
+};
+
+        public LiveChartsCore.SkiaSharpView.Axis[] YAxes { get; } = new[]
+        {
+           new LiveChartsCore.SkiaSharpView.Axis
+    {
+        TextSize = 10,
+        LabelsPaint = new SolidColorPaint(SKColors.LightGray)
+    }
+};
+
         // Alarm system status properties
         public bool Subsystem1Status
         {
@@ -428,6 +458,7 @@ namespace SatelliteGroundStation.ViewModels
             get => _subsystem6Status;
             set => SetProperty(ref _subsystem6Status, value);
         }
+
         // Video Properties
         public BitmapSource? CurrentVideoFrame
         {

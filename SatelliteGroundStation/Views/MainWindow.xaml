@@ -221,16 +221,50 @@
 
             <!-- Center Column - Video Feed -->
             <GroupBox Grid.Column="1" Header="Canlı Video Yayını" Foreground="White" Margin="2">
-                <Border Background="Black">
-                    <!-- Placeholder for video feed -->
-                    <Grid>
-                        <Image x:Name="VideoImage" Stretch="Uniform"/>
-                        <TextBlock Text="Video Feed\n(Kamera bağlı değil)" 
-                                  Foreground="Gray" FontSize="16" 
-                                  HorizontalAlignment="Center" VerticalAlignment="Center"
-                                  TextAlignment="Center"/>
-                    </Grid>
-                </Border>
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="30"/>
+                        <!-- Video Controls -->
+                        <RowDefinition Height="*"/>
+                        <!-- Video Display -->
+                    </Grid.RowDefinitions>
+
+                    <!-- Video Controls -->
+                    <StackPanel Grid.Row="0" Orientation="Horizontal" 
+                   Background="#FF404040" Height="30">
+                        <ComboBox ItemsSource="{Binding AvailableVideoDevices}" 
+                     SelectedItem="{Binding SelectedVideoDevice}" 
+                     Width="150" Margin="5" 
+                     DisplayMemberPath="Name"/>
+                        <Button Content="Başlat" Command="{Binding StartVideoCaptureCommand}" 
+                   Style="{StaticResource CommandButtonStyle}" Width="50"/>
+                        <Button Content="Durdur" Command="{Binding StopVideoCaptureCommand}" 
+                   Style="{StaticResource CommandButtonStyle}" Width="50"/>
+                    </StackPanel>
+
+                    <!-- Video Display -->
+                    <Border Grid.Row="1" Background="Black">
+                        <Grid>
+                            <Image x:Name="VideoImage" 
+                      Source="{Binding CurrentVideoFrame}" 
+                      Stretch="Uniform"/>
+                            <TextBlock Text="Video Feed&#x0a;(Kamera seçin ve başlatın)" 
+                          Foreground="Gray" FontSize="16" 
+                          HorizontalAlignment="Center" VerticalAlignment="Center"
+                          TextAlignment="Center">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsVideoCapturing}" Value="True">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </Grid>
+                    </Border>
+                </Grid>
             </GroupBox>
 
             <!-- Right Column -->
@@ -243,8 +277,16 @@
                 <!-- GPS Map -->
                 <GroupBox Grid.Row="0" Header="Canlı GPS Verileri" Foreground="White" Margin="2">
                     <Border Background="LightGray">
-                        <!-- GPS Map placeholder -->
-                        <gmap:GMapControl x:Name="GpsMap" Zoom="10" />
+                        <!-- GMap yerine basit bir placeholder kullanalım -->
+                        <Grid>
+                            <Rectangle Fill="LightGray"/>
+                            <Image Source="https://via.placeholder.com/300x200/cccccc/666666?text=GPS+MAP" 
+                   Stretch="Uniform" Margin="5"/>
+                            <TextBlock Text="GPS Harita&#x0a;(Harita servisi bağlanacak)" 
+                      Foreground="DarkGray" FontSize="12" 
+                      HorizontalAlignment="Center" VerticalAlignment="Center"
+                      TextAlignment="Center"/>
+                        </Grid>
                     </Border>
                 </GroupBox>
 
