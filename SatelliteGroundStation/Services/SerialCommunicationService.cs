@@ -28,7 +28,7 @@ namespace SatelliteGroundStation.Services
                 {
                     ReadTimeout = 500,
                     WriteTimeout = 500,
-                    NewLine = "\r\n"
+                    NewLine = "\n"
                 };
 
                 _serialPort.DataReceived += OnSerialDataReceived;
