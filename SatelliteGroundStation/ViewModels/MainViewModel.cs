@@ -10,7 +10,6 @@ using LiveChartsCore;
 using LiveChartsCore.SkiaSharpView;
 using LiveChartsCore.SkiaSharpView.Painting;
 using SkiaSharp;
-using SatelliteGroundStation.Services;
 using System.Windows.Media.Imaging;
 
 namespace SatelliteGroundStation.ViewModels
