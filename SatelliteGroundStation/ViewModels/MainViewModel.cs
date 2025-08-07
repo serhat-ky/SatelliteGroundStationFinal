@@ -768,7 +768,6 @@ namespace SatelliteGroundStation.ViewModels
         private void TestFormat2Parsing()
         {
             Console.WriteLine("=== FORMAT 2 PARSING TEST ===");
-            _parsingService.TestParsing();
 
             // Örnek veri ile grafikleri test et
             string testData = "$DATA,12345,25.5,1013.2,1500.0,45.2,3.85,12.5,-8.3,15.7";
