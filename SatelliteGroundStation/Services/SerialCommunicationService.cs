@@ -28,7 +28,7 @@ namespace SatelliteGroundStation.Services
                 {
                     ReadTimeout = 500,
                     WriteTimeout = 500,
-                    NewLine = "\r\n"
+                    NewLine = "\n" 
                 };
 
                 _serialPort.DataReceived += OnSerialDataReceived;
@@ -85,6 +85,7 @@ namespace SatelliteGroundStation.Services
                 if (_serialPort?.IsOpen == true)
                 {
                     string data = _serialPort.ReadLine();
+                    Console.WriteLine("📡 Gelen veri: " + data);  // Debug çıktısı
                     DataReceived?.Invoke(this, data);
                 }
             }
@@ -93,6 +94,7 @@ namespace SatelliteGroundStation.Services
                 Console.WriteLine($"Data receive error: {ex.Message}");
             }
         }
+
 
         public List<string> GetAvailablePorts()
         {
