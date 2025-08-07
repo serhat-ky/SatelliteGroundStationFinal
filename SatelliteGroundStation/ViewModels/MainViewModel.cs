@@ -12,6 +12,8 @@ using LiveChartsCore.SkiaSharpView.Painting;
 using SkiaSharp;
 using System.Windows.Media.Imaging;
 using LiveChartsCore.Kernel;
+using Microsoft.Web.WebView2.Wpf;
+using System.Threading.Tasks;
 
 namespace SatelliteGroundStation.ViewModels
 {
@@ -20,6 +22,19 @@ namespace SatelliteGroundStation.ViewModels
         private readonly SerialCommunicationService _serialService;
         private readonly TelemetryParsingService _parsingService;
         private readonly DataExportService _exportService;
+
+        // ↓ Video capture service
+        private readonly VideoCaptureService _videoCaptureService;
+
+        // ↓ Map service
+        private readonly MapService _mapService;
+
+        // Video properties private fields
+        private BitmapSource? _currentVideoFrame;
+        private bool _isVideoCapturing = false;
+        private VideoDeviceInfo? _selectedVideoDevice;
+        private VideoResolution _selectedVideoResolution = VideoResolution.Resolution_640x480;
+        private bool _isMapInitialized = false;
 
         // Connection properties
         private bool _isConnected;
@@ -85,6 +100,10 @@ namespace SatelliteGroundStation.ViewModels
         public ICommand StopVideoCaptureCommand { get; }
         public ICommand RefreshVideoDevicesCommand { get; }
         public ICommand SaveVideoFrameCommand { get; }
+        public ICommand InitializeMapCommand { get; }
+        public ICommand CenterMapCommand { get; }
+        public ICommand ClearTrackCommand { get; }
+        public ICommand ChangeMapTypeCommand { get; }
 
         public MainViewModel()
         {
@@ -92,6 +111,8 @@ namespace SatelliteGroundStation.ViewModels
             _parsingService = new TelemetryParsingService();
             _exportService = new DataExportService();
             _videoCaptureService = new VideoCaptureService();
+            _mapService = new MapService();
+            _mapService.MapError += OnMapError;
 
             // Initialize collections
             TelemetryDataCollection = new ObservableCollection<TelemetryData>();
@@ -203,6 +224,8 @@ namespace SatelliteGroundStation.ViewModels
             StopVideoCaptureCommand = new RelayCommand(StopVideoCapture, () => IsVideoCapturing);
             RefreshVideoDevicesCommand = new RelayCommand(RefreshVideoDevices);
             SaveVideoFrameCommand = new RelayCommand(SaveVideoFrame, () => CurrentVideoFrame != null);
+            CenterMapCommand = new RelayCommand(async () => await CenterMapOnSatelliteAsync());
+            ClearTrackCommand = new RelayCommand(ClearGpsTrack);
 
             // Subscribe to serial service events
             _serialService.DataReceived += OnDataReceived;
@@ -220,11 +243,6 @@ namespace SatelliteGroundStation.ViewModels
 
             // Generate sample data for demonstration
             GenerateSampleData();
-
-            // Generate sample data for demonstration
-            GenerateSampleData();
-
-
         }
 
         #region Video Methods
@@ -291,6 +309,41 @@ namespace SatelliteGroundStation.ViewModels
             }
         }
 
+        #region Map Methods
+
+        public async Task InitializeMapAsync(WebView2 webView)
+        {
+            try
+            {
+                await _mapService.InitializeAsync(webView);
+                _isMapInitialized = true;
+            }
+            catch (Exception ex)
+            {
+                OnMapError(this, $"Map initialization error: {ex.Message}");
+            }
+        }
+
+        public async Task CenterMapOnSatelliteAsync()
+        {
+            if (_isMapInitialized && GpsLatitude != 0 && GpsLongitude != 0)
+            {
+                await _mapService.SetMapCenterAsync(GpsLatitude, GpsLongitude, 15);
+            }
+        }
+
+        public void ClearGpsTrack()
+        {
+            _mapService.ClearTrack();
+        }
+
+        private void OnMapError(object? sender, string error)
+        {
+            MessageBox.Show($"Harita hatası: {error}", "Harita Hatası", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+
+        #endregion
+
         // Video Event handlers
         private void OnVideoFrameReceived(object? sender, BitmapSource frame)
         {
@@ -311,6 +364,7 @@ namespace SatelliteGroundStation.ViewModels
         {
             _videoCaptureService?.Dispose();
             _serialService?.Dispose();
+            _mapService?.ClearTrack();
         }
 
         #endregion
@@ -623,6 +677,24 @@ namespace SatelliteGroundStation.ViewModels
                 TelemetryDataCollection.RemoveAt(TelemetryDataCollection.Count - 1);
             }
 
+            if (_isMapInitialized && telemetryData.GpsLatitude != 0 && telemetryData.GpsLongitude != 0)
+            {
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await _mapService.UpdateGpsLocationAsync(
+                            telemetryData.GpsLatitude,
+                            telemetryData.GpsLongitude,
+                            telemetryData.Altitude);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"GPS update error: {ex.Message}");
+                    }
+                });
+            }
+
             SatelliteStatus = "Veri Alınıyor";
         }
 
@@ -667,12 +739,6 @@ namespace SatelliteGroundStation.ViewModels
             }
         }
         
-        private readonly VideoCaptureService _videoCaptureService;
-        private BitmapSource? _currentVideoFrame;
-        private bool _isVideoCapturing = false;
-        private VideoDeviceInfo? _selectedVideoDevice;
-        private VideoResolution _selectedVideoResolution = VideoResolution.Resolution_640x480;
-
         #endregion
     }
 
