@@ -84,15 +84,13 @@
 
                 <!-- Logo Section -->
                 <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="10">
-                    <!-- Turkish Flag -->
-                    <Border Background="Red" Width="30" Height="20" Margin="5,0">
-                        <Ellipse Fill="White" Width="12" Height="12" HorizontalAlignment="Center"/>
-                    </Border>
-                    <!-- HIDROSPHERE Logo -->
-                    <Border Background="#FF0066CC" Width="100" Height="40" Margin="10,0">
-                        <TextBlock Text="HIDROSPHERE" Foreground="White" FontSize="8" 
-                                  HorizontalAlignment="Center" VerticalAlignment="Center" FontWeight="Bold"/>
-                    </Border>
+
+                    <!-- Turkish Flag Image -->
+                    <Image Source="/Images/flagofturkey.png" Width="60" Height="60" Margin="5,0"/>
+
+                    <!-- HIDROSPHERE Logo Image -->
+                    <Image Source="/Images/hidlogo.png" Width="60" Height="60" Margin="10,0"/>
+
                 </StackPanel>
 
                 <!-- Control Panel -->
