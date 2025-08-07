@@ -612,27 +612,19 @@ namespace SatelliteGroundStation.ViewModels
 
         private void OnDataReceived(object? sender, string data)
         {
-            Application.Current.Dispatcher.Invoke(() =>
-            {
-                var telemetryData = _parsingService.ParseTelemetryData(data);
-                if (telemetryData != null)
-                {
-                    ProcessTelemetryData(telemetryData);
-                }
-            });
-            Console.WriteLine($"Raw data received: {data}");
+            Console.WriteLine($"📡 Raw data received: '{data}'");
 
             Application.Current.Dispatcher.Invoke(() =>
             {
                 var telemetryData = _parsingService.ParseTelemetryData(data);
                 if (telemetryData != null)
                 {
-                    Console.WriteLine("✅ Data parsed successfully, updating charts...");
+                    Console.WriteLine($"✅ Data parsed: T={telemetryData.Temperature}°C");
                     ProcessTelemetryData(telemetryData);
                 }
                 else
                 {
-                    Console.WriteLine("❌ Failed to parse telemetry data");
+                    Console.WriteLine($"❌ Failed to parse data: '{data}'");
                 }
             });
         }
@@ -655,7 +647,6 @@ namespace SatelliteGroundStation.ViewModels
 
         private void ProcessTelemetryData(TelemetryData telemetryData)
         {
-            // ↓ DEBUG SATIRLARI EKLEYİN ↓
             Console.WriteLine($"🔥 ProcessTelemetryData called: T={telemetryData.Temperature:F1}°C, P={telemetryData.Pressure:F0}Pa");
 
             _currentTelemetry = telemetryData;
@@ -682,8 +673,7 @@ namespace SatelliteGroundStation.ViewModels
             GyroYData.Add(new DataPoint(now, telemetryData.GyroY));
             GyroZData.Add(new DataPoint(now, telemetryData.GyroZ));
 
-            // ↓ CHART DEBUG EKLEYİN ↓
-            Console.WriteLine($"📊 Chart points added: Temp={TemperatureData.Count}, Pressure={PressureData.Count}, Speed={SpeedData.Count}");
+            Console.WriteLine($"📊 Chart points added: Temp={TemperatureData.Count}, Pressure={PressureData.Count}");
 
             // Keep only last 100 points for performance
             if (TemperatureData.Count > 100) TemperatureData.RemoveAt(0);
@@ -719,9 +709,6 @@ namespace SatelliteGroundStation.ViewModels
             }
 
             SatelliteStatus = "Veri Alınıyor";
-
-            // ↓ SON DEBUG SATIRI ↓
-            Console.WriteLine("✅ ProcessTelemetryData completed successfully!");
         }
 
         private void RefreshComPorts()
@@ -783,6 +770,8 @@ namespace SatelliteGroundStation.ViewModels
                 Console.WriteLine("❌ Test parsing failed!");
             }
         }
+
+
 
         #endregion
     }

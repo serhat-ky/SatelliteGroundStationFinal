@@ -313,27 +313,47 @@
 
             <!-- Temperature Chart -->
             <GroupBox Grid.Column="0" Header="Sıcaklık Grafiği" Foreground="White" Margin="2">
-                <lvc:CartesianChart Series="{Binding TemperatureSeries}" Background="Black"/>
+                <lvc:CartesianChart Series="{Binding TemperatureSeries}" 
+                           XAxes="{Binding XAxes}"
+                           YAxes="{Binding YAxes}"
+                           Background="Black"
+                           AnimationsSpeed="00:00:00.100"/>
             </GroupBox>
 
             <!-- Pressure Chart -->
             <GroupBox Grid.Column="1" Header="Basınç Grafiği" Foreground="White" Margin="2">
-                <lvc:CartesianChart Series="{Binding PressureSeries}" Background="Black"/>
+                <lvc:CartesianChart Series="{Binding PressureSeries}" 
+                           XAxes="{Binding XAxes}"
+                           YAxes="{Binding YAxes}"
+                           Background="Black"
+                           AnimationsSpeed="00:00:00.100"/>
             </GroupBox>
 
             <!-- Speed Chart -->
             <GroupBox Grid.Column="2" Header="Hız Grafiği" Foreground="White" Margin="2">
-                <lvc:CartesianChart Series="{Binding SpeedSeries}" Background="Black"/>
+                <lvc:CartesianChart Series="{Binding SpeedSeries}" 
+                           XAxes="{Binding XAxes}"
+                           YAxes="{Binding YAxes}"
+                           Background="Black"
+                           AnimationsSpeed="00:00:00.100"/>
             </GroupBox>
 
             <!-- Battery Voltage Chart -->
             <GroupBox Grid.Column="3" Header="Pil Gerilimi Grafiği" Foreground="White" Margin="2">
-                <lvc:CartesianChart Series="{Binding BatteryVoltageSeries}" Background="Black"/>
+                <lvc:CartesianChart Series="{Binding BatteryVoltageSeries}" 
+                           XAxes="{Binding XAxes}"
+                           YAxes="{Binding YAxes}"
+                           Background="Black"
+                           AnimationsSpeed="00:00:00.100"/>
             </GroupBox>
 
             <!-- Axis Data Chart -->
             <GroupBox Grid.Column="4" Header="Eksen Verileri Grafiği" Foreground="White" Margin="2">
-                <lvc:CartesianChart Series="{Binding AxisDataSeries}" Background="Black"/>
+                <lvc:CartesianChart Series="{Binding AxisDataSeries}" 
+                           XAxes="{Binding XAxes}"
+                           YAxes="{Binding YAxes}"
+                           Background="Black"
+                           AnimationsSpeed="00:00:00.100"/>
             </GroupBox>
         </Grid>
 
