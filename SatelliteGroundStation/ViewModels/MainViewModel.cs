@@ -550,10 +550,13 @@ namespace SatelliteGroundStation.ViewModels
         {
             try
             {
+                Console.WriteLine($"🔌 Attempting to connect to {SelectedComPort} at {SelectedBaudRate} baud...");
                 _serialService.Connect(SelectedComPort, SelectedBaudRate);
+                Console.WriteLine("✅ Connect method completed successfully");
             }
             catch (Exception ex)
             {
+                Console.WriteLine($"❌ Connect failed: {ex.Message}");
                 MessageBox.Show($"Bağlantı hatası: {ex.Message}", "Hata", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
@@ -609,7 +612,7 @@ namespace SatelliteGroundStation.ViewModels
         #endregion
 
         #region Event Handlers
-
+            
         private void OnDataReceived(object? sender, string data)
         {
             Console.WriteLine($"📡 Raw data received: '{data}'");

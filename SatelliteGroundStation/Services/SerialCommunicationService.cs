@@ -19,8 +19,11 @@ namespace SatelliteGroundStation.Services
         {
             try
             {
+                Console.WriteLine($"🔧 SerialService: Connecting to {portName}...");
+
                 if (_serialPort?.IsOpen == true)
                 {
+                    Console.WriteLine("🔧 SerialService: Closing existing connection...");
                     _serialPort.Close();
                 }
 
@@ -28,16 +31,18 @@ namespace SatelliteGroundStation.Services
                 {
                     ReadTimeout = 500,
                     WriteTimeout = 500,
-                    NewLine = "\n" 
+                    NewLine = "\r\n"
                 };
 
                 _serialPort.DataReceived += OnSerialDataReceived;
                 _serialPort.Open();
 
+                Console.WriteLine("✅ SerialService: Port opened successfully");
                 ConnectionChanged?.Invoke(this, true);
             }
             catch (Exception ex)
             {
+                Console.WriteLine($"❌ SerialService: Connection failed - {ex.Message}");
                 ConnectionChanged?.Invoke(this, false);
                 throw new InvalidOperationException($"COM port bağlantı hatası: {ex.Message}", ex);
             }
