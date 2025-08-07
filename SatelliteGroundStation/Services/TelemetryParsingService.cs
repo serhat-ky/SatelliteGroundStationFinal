@@ -93,25 +93,5 @@ namespace SatelliteGroundStation.Services
             return 0.0;
         }
 
-        /// <summary>
-        /// Veri formatını test etmek için
-        /// </summary>
-        public void TestParsing()
-        {
-            string testData = "$DATA,12345,25.5,1013.2,1500.0,45.2,3.85,12.5,-8.3,15.7";
-            var result = ParseTelemetryData(testData);
-
-            if (result != null)
-            {
-                Console.WriteLine("✅ Parsing test successful!");
-                Console.WriteLine($"Temperature: {result.Temperature}°C");
-                Console.WriteLine($"Pressure: {result.Pressure}Pa");
-                Console.WriteLine($"Altitude: {result.Altitude}m");
-            }
-            else
-            {
-                Console.WriteLine("❌ Parsing test failed!");
-            }
-        }
     }
 }
