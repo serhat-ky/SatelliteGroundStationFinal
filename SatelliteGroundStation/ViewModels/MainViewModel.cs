@@ -620,6 +620,21 @@ namespace SatelliteGroundStation.ViewModels
                     ProcessTelemetryData(telemetryData);
                 }
             });
+            Console.WriteLine($"Raw data received: {data}");
+
+            Application.Current.Dispatcher.Invoke(() =>
+            {
+                var telemetryData = _parsingService.ParseTelemetryData(data);
+                if (telemetryData != null)
+                {
+                    Console.WriteLine("✅ Data parsed successfully, updating charts...");
+                    ProcessTelemetryData(telemetryData);
+                }
+                else
+                {
+                    Console.WriteLine("❌ Failed to parse telemetry data");
+                }
+            });
         }
 
         private void OnConnectionChanged(object? sender, bool isConnected)
@@ -640,6 +655,9 @@ namespace SatelliteGroundStation.ViewModels
 
         private void ProcessTelemetryData(TelemetryData telemetryData)
         {
+            // ↓ DEBUG SATIRLARI EKLEYİN ↓
+            Console.WriteLine($"🔥 ProcessTelemetryData called: T={telemetryData.Temperature:F1}°C, P={telemetryData.Pressure:F0}Pa");
+
             _currentTelemetry = telemetryData;
 
             // Update current values
@@ -663,6 +681,9 @@ namespace SatelliteGroundStation.ViewModels
             GyroXData.Add(new DataPoint(now, telemetryData.GyroX));
             GyroYData.Add(new DataPoint(now, telemetryData.GyroY));
             GyroZData.Add(new DataPoint(now, telemetryData.GyroZ));
+
+            // ↓ CHART DEBUG EKLEYİN ↓
+            Console.WriteLine($"📊 Chart points added: Temp={TemperatureData.Count}, Pressure={PressureData.Count}, Speed={SpeedData.Count}");
 
             // Keep only last 100 points for performance
             if (TemperatureData.Count > 100) TemperatureData.RemoveAt(0);
@@ -698,6 +719,9 @@ namespace SatelliteGroundStation.ViewModels
             }
 
             SatelliteStatus = "Veri Alınıyor";
+
+            // ↓ SON DEBUG SATIRI ↓
+            Console.WriteLine("✅ ProcessTelemetryData completed successfully!");
         }
 
         private void RefreshComPorts()
