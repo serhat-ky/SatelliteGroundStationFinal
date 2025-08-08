@@ -14,6 +14,8 @@ using System.Windows.Media.Imaging;
 using LiveChartsCore.Kernel;
 using Microsoft.Web.WebView2.Wpf;
 using System.Threading.Tasks;
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
 
 namespace SatelliteGroundStation.ViewModels
 {
@@ -22,6 +24,7 @@ namespace SatelliteGroundStation.ViewModels
         private readonly SerialCommunicationService _serialService;
         private readonly TelemetryParsingService _parsingService;
         private readonly DataExportService _exportService;
+        private MultispektralFiltreService _filterService;
 
         // ↓ Video capture service
         private readonly VideoCaptureService _videoCaptureService;
@@ -91,9 +94,6 @@ namespace SatelliteGroundStation.ViewModels
         public ICommand ExportDataCommand { get; }
         public ICommand StartTelemetryCommand { get; }
         public ICommand SendCommandCodeCommand { get; }
-        public ICommand PurpleFilterCommand { get; }
-        public ICommand BlueFilterCommand { get; }
-        public ICommand GreenFilterCommand { get; }
 
         // Video Commands
         public ICommand StartVideoCaptureCommand { get; }
@@ -105,6 +105,57 @@ namespace SatelliteGroundStation.ViewModels
         public ICommand ClearTrackCommand { get; }
         public ICommand ChangeMapTypeCommand { get; }
 
+        // Multispectral Filter Commands
+        private ICommand? _redFilterCommand;
+        private ICommand? _greenFilterCommand;
+        private ICommand? _blueFilterCommand;
+        private ICommand? _purpleFilterCommand;
+
+        public ICommand RedFilterCommand
+        {
+            get
+            {
+                return _redFilterCommand ??= new RelayCommand(async () =>
+                {
+                    await _filterService.SetRedFilterAsync();
+                });
+            }
+        }
+
+        public ICommand GreenFilterCommand
+        {
+            get
+            {
+                return _greenFilterCommand ??= new RelayCommand(async () =>
+                {
+                    await _filterService.SetGreenFilterAsync();
+                });
+            }
+        }
+
+        public ICommand BlueFilterCommand
+        {
+            get
+            {
+                return _blueFilterCommand ??= new RelayCommand(async () =>
+                {
+                    await _filterService.SetBlueFilterAsync();
+                });
+            }
+        }
+
+        public ICommand PurpleFilterCommand
+        {
+            get
+            {
+                return _purpleFilterCommand ??= new RelayCommand(async () =>
+                {
+                    await _filterService.SetPurpleFilterAsync();
+                });
+            }
+        }
+
+
         public MainViewModel()
         {
             _serialService = new SerialCommunicationService();
@@ -113,6 +164,11 @@ namespace SatelliteGroundStation.ViewModels
             _videoCaptureService = new VideoCaptureService();
             _mapService = new MapService();
             _mapService.MapError += OnMapError;
+
+            _filterService = new MultispektralFiltreService(_serialService);
+            _filterService.FilterChanged += OnFilterStateChanged;      //
+            _filterService.CommandSent += OnFilterCommandSentEvent;    // 
+            _filterService.ErrorOccurred += OnFilterErrorEvent;        //         
 
             // Initialize collections
             TelemetryDataCollection = new ObservableCollection<TelemetryData>();
@@ -217,9 +273,6 @@ namespace SatelliteGroundStation.ViewModels
             ExportDataCommand = new RelayCommand(ExportData);
             StartTelemetryCommand = new RelayCommand(StartTelemetry, () => IsConnected);
             SendCommandCodeCommand = new RelayCommand(SendCommandCode, () => IsConnected && !string.IsNullOrEmpty(CommandCode));
-            PurpleFilterCommand = new RelayCommand(() => SendFilterCommand("PURPLE"), () => IsConnected);
-            BlueFilterCommand = new RelayCommand(() => SendFilterCommand("BLUE"), () => IsConnected);
-            GreenFilterCommand = new RelayCommand(() => SendFilterCommand("GREEN"), () => IsConnected);
             StartVideoCaptureCommand = new RelayCommand(StartVideoCapture, CanStartVideoCapture);
             StopVideoCaptureCommand = new RelayCommand(StopVideoCapture, () => IsVideoCapturing);
             RefreshVideoDevicesCommand = new RelayCommand(RefreshVideoDevices);
@@ -367,6 +420,7 @@ namespace SatelliteGroundStation.ViewModels
             _videoCaptureService?.Dispose();
             _serialService?.Dispose();
             _mapService?.ClearTrack();
+            _filterService?.Dispose();
         }
 
         #endregion
@@ -609,10 +663,12 @@ namespace SatelliteGroundStation.ViewModels
             _serialService.SendCommand($"FILTER_{filter}");
         }
 
+        public FilterData FilterData => _filterService.FilterData;
+
         #endregion
 
         #region Event Handlers
-            
+
         private void OnDataReceived(object? sender, string data)
         {
             Console.WriteLine($"📡 Raw data received: '{data}'");
@@ -773,39 +829,25 @@ namespace SatelliteGroundStation.ViewModels
                 Console.WriteLine("❌ Test parsing failed!");
             }
         }
+        #endregion
 
+        #region Filter Event Handlers
 
+        private void OnFilterStateChanged(object? sender, string filterCode)
+        {
+            Console.WriteLine($"🎯 UI: Filter changed to {filterCode}");
+        }
+
+        private void OnFilterCommandSentEvent(object? sender, string command)
+        {
+            Console.WriteLine($"📤 UI: Filter command sent: {command}");
+        }
+
+        private void OnFilterErrorEvent(object? sender, string error)
+        {
+            Console.WriteLine($"❌ UI: Filter error: {error}");
+        }
 
         #endregion
     }
-
-    // Simple RelayCommand implementation
-    public class RelayCommand : ICommand
-    {
-        private readonly Action _execute;
-        private readonly Func<bool>? _canExecute;
-
-        public RelayCommand(Action execute, Func<bool>? canExecute = null)
-        {
-            _execute = execute ?? throw new ArgumentNullException(nameof(execute));
-            _canExecute = canExecute;
-        }
-
-        public event EventHandler? CanExecuteChanged
-        {
-            add { CommandManager.RequerySuggested += value; }
-            remove { CommandManager.RequerySuggested -= value; }
-        }
-
-        public bool CanExecute(object? parameter)
-        {
-            return _canExecute?.Invoke() ?? true;
-        }
-
-        public void Execute(object? parameter)
-        {
-            _execute();
-        }
-    }
-
 }
