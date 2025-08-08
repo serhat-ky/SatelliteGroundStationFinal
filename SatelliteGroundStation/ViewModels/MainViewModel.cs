@@ -25,6 +25,8 @@ namespace SatelliteGroundStation.ViewModels
         private readonly TelemetryParsingService _parsingService;
         private readonly DataExportService _exportService;
         private MultispektralFiltreService _filterService;
+        private string _commandCode = "";
+        private ICommand? _sendCommandCodeCommand;
 
         // ↓ Video capture service
         private readonly VideoCaptureService _videoCaptureService;
@@ -45,7 +47,6 @@ namespace SatelliteGroundStation.ViewModels
         private string _connectionStatus = "Bağlı Değil";
         private string _selectedComPort = "";
         private int _selectedBaudRate = 9600;
-        private string _commandCode = "";
 
         // Telemetry data
         private TelemetryData? _currentTelemetry;
@@ -93,7 +94,6 @@ namespace SatelliteGroundStation.ViewModels
         public ICommand ManualReleaseCommand { get; }
         public ICommand ExportDataCommand { get; }
         public ICommand StartTelemetryCommand { get; }
-        public ICommand SendCommandCodeCommand { get; }
 
         // Video Commands
         public ICommand StartVideoCaptureCommand { get; }
@@ -155,6 +155,21 @@ namespace SatelliteGroundStation.ViewModels
             }
         }
 
+        public ICommand SendCommandCodeCommand
+        {
+            get
+            {
+                return _sendCommandCodeCommand ??= new RelayCommand(
+                    SendCommandCode,
+                    () =>
+                    {
+                        bool canExecute = IsConnected && !string.IsNullOrEmpty(CommandCode);
+                        Console.WriteLine($"🎯 SendCommand CanExecute: {canExecute}");
+                        return canExecute;
+                    }
+                );
+            }
+        }
 
         public MainViewModel()
         {
@@ -272,7 +287,6 @@ namespace SatelliteGroundStation.ViewModels
             ManualReleaseCommand = new RelayCommand(SendManualRelease, () => IsConnected);
             ExportDataCommand = new RelayCommand(ExportData);
             StartTelemetryCommand = new RelayCommand(StartTelemetry, () => IsConnected);
-            SendCommandCodeCommand = new RelayCommand(SendCommandCode, () => IsConnected && !string.IsNullOrEmpty(CommandCode));
             StartVideoCaptureCommand = new RelayCommand(StartVideoCapture, CanStartVideoCapture);
             StopVideoCaptureCommand = new RelayCommand(StopVideoCapture, () => IsVideoCapturing);
             RefreshVideoDevicesCommand = new RelayCommand(RefreshVideoDevices);
@@ -464,7 +478,12 @@ namespace SatelliteGroundStation.ViewModels
         public string CommandCode
         {
             get => _commandCode;
-            set => SetProperty(ref _commandCode, value);
+            set
+            {
+                SetProperty(ref _commandCode, value);
+                CommandManager.InvalidateRequerySuggested(); // Command'ın CanExecute'unu güncelle
+                Console.WriteLine($"🎯 CommandCode changed to: '{value}' (Length: {value?.Length})");
+            }
         }
 
         public double CurrentTemperature
@@ -651,10 +670,22 @@ namespace SatelliteGroundStation.ViewModels
 
         private void SendCommandCode()
         {
-            if (!string.IsNullOrEmpty(CommandCode) && CommandCode.Length == 4)
+            Console.WriteLine($"📤 SendCommandCode executed - Code: '{CommandCode}'");
+            Console.WriteLine($"📤 IsConnected: {IsConnected}");
+
+            if (!string.IsNullOrEmpty(CommandCode))
             {
+                Console.WriteLine($"📤 Sending command: {CommandCode}");
                 _serialService.SendCommand(CommandCode);
-                CommandCode = ""; // Clear after sending
+                Console.WriteLine($"✅ Command '{CommandCode}' sent to Arduino");
+
+                CommandCode = "";
+                Console.WriteLine("🧹 CommandCode cleared");
+            }
+            else
+            {
+                Console.WriteLine("❌ CommandCode is empty or null");
+                MessageBox.Show("Lütfen bir komut kodu girin!", "Hata", MessageBoxButton.OK, MessageBoxImage.Warning);
             }
         }
 

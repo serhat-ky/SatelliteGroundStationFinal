@@ -105,12 +105,14 @@
                         <!-- Multi-Spectral Filter Panel -->
                         <GroupBox Header="Multi-Spektral Filtre" Foreground="White" Margin="10,0">
                             <StackPanel Orientation="Horizontal">
-                                <Button Style="{StaticResource FilterButtonStyle}" Background="Purple" 
-                                       Command="{Binding PurpleFilterCommand}"/>
-                                <Button Style="{StaticResource FilterButtonStyle}" Background="Blue" 
-                                       Command="{Binding BlueFilterCommand}"/>
+                                <Button Style="{StaticResource FilterButtonStyle}" Background="Red" 
+                                Command="{Binding RedFilterCommand}" Content="R"/>
                                 <Button Style="{StaticResource FilterButtonStyle}" Background="Green" 
-                                       Command="{Binding GreenFilterCommand}"/>
+                                Command="{Binding GreenFilterCommand}" Content="G"/>
+                                <Button Style="{StaticResource FilterButtonStyle}" Background="Blue" 
+                                Command="{Binding BlueFilterCommand}" Content="B"/>
+                                <Button Style="{StaticResource FilterButtonStyle}" Background="Purple" 
+                                Command="{Binding PurpleFilterCommand}" Content="P"/>
 
                                 <!-- Command Code Input -->
                                 <TextBox x:Name="CommandCodeTextBox" Width="60" Height="25" Margin="10,0,5,0" 
