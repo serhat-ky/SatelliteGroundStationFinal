@@ -123,6 +123,39 @@
                             </StackPanel>
                         </GroupBox>
 
+                        <!-- Quick Commands Panel -->
+                        <GroupBox Header="Hızlı Zamanlı Komutlar" Foreground="White" Margin="10,0">
+                            <StackPanel Orientation="Horizontal">
+                                <!-- Preset Commands -->
+                                <Button Content="3g5r" Command="{Binding Quick3g5rCommand}" 
+               Style="{StaticResource CommandButtonStyle}" 
+               ToolTip="3 saniye yeşil, 5 saniye kırmızı"/>
+
+                                <Button Content="2b4n" Command="{Binding Quick2b4nCommand}" 
+               Style="{StaticResource CommandButtonStyle}"
+               ToolTip="2 saniye mavi, 4 saniye normal"/>
+
+                                <Button Content="5g2r3b" Command="{Binding Quick5g2r3bCommand}" 
+               Style="{StaticResource CommandButtonStyle}"
+               ToolTip="5 saniye yeşil, 2 saniye kırmızı, 3 saniye mavi"/>
+
+                                <Button Content="10g" Command="{Binding Quick10gCommand}" 
+               Style="{StaticResource CommandButtonStyle}"
+               ToolTip="10 saniye yeşil"/>
+
+                                <Button Content="Test" Command="{Binding QuickTestSequenceCommand}" 
+               Style="{StaticResource CommandButtonStyle}"
+               ToolTip="Test sekansı: 1r1g1b1n"/>
+                            </StackPanel>
+                        </GroupBox>
+
+                        <!-- Cancel Button -->
+                        <Button Content="Sekansı Durdur" Command="{Binding CancelTimedSequenceCommand}" 
+       Style="{StaticResource CommandButtonStyle}"
+       Background="DarkRed"
+       Visibility="{Binding IsTimedSequenceRunning, Converter={StaticResource BoolToVisConverter}}"
+       ToolTip="Çalışan zamanlı sekansı durdur"/>
+
                         <!-- Command Buttons -->
                         <Button Content="Manuel Bırakma" Style="{StaticResource CommandButtonStyle}" 
                                Command="{Binding ManualReleaseCommand}"/>

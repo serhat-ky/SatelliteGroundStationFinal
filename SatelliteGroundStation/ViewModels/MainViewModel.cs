@@ -17,6 +17,7 @@ using System.Threading.Tasks;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 
+
 namespace SatelliteGroundStation.ViewModels
 {
     public class MainViewModel : ViewModelBase, IDisposable
@@ -171,6 +172,8 @@ namespace SatelliteGroundStation.ViewModels
             }
         }
 
+        private TimedFilterService _timedFilterService;
+
         public MainViewModel()
         {
             _serialService = new SerialCommunicationService();
@@ -181,6 +184,8 @@ namespace SatelliteGroundStation.ViewModels
             _mapService.MapError += OnMapError;
 
             _filterService = new MultispektralFiltreService(_serialService);
+            _timedFilterService = new TimedFilterService(_serialService, _filterService);
+
             _filterService.FilterChanged += OnFilterStateChanged;      //
             _filterService.CommandSent += OnFilterCommandSentEvent;    // 
             _filterService.ErrorOccurred += OnFilterErrorEvent;        //         
@@ -588,6 +593,32 @@ namespace SatelliteGroundStation.ViewModels
             set => SetProperty(ref _subsystem6Status, value);
         }
 
+        // Quick Command Properties
+        public ICommand Quick3g5rCommand => new RelayCommand(async () => await ExecuteQuickCommand("3g5r"));
+        public ICommand Quick2b4nCommand => new RelayCommand(async () => await ExecuteQuickCommand("2b4n"));
+        public ICommand Quick5g2r3bCommand => new RelayCommand(async () => await ExecuteQuickCommand("5g2r3b"));
+        public ICommand Quick10gCommand => new RelayCommand(async () => await ExecuteQuickCommand("10g"));
+        public ICommand QuickTestSequenceCommand => new RelayCommand(async () => await ExecuteQuickCommand("1r1g1b1n"));
+
+        // Quick command execution
+        private async Task ExecuteQuickCommand(string command)
+        {
+            Console.WriteLine($"🚀 Quick command: {command}");
+            CommandCode = command;
+
+            // SendCommandCode metodunu çağır
+            if (TimedFilterService.IsTimedCommand(command))
+            {
+                await _timedFilterService.ExecuteTimedSequenceAsync(command);
+            }
+            else
+            {
+                _serialService.SendCommand(command);
+            }
+
+            CommandCode = "";
+        }
+
         // Video Properties
         public BitmapSource? CurrentVideoFrame
         {
@@ -730,6 +761,8 @@ namespace SatelliteGroundStation.ViewModels
                 }
             });
         }
+
+
 
         #endregion
 
