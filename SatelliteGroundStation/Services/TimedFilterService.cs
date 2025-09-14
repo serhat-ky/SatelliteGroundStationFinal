@@ -40,6 +40,7 @@ namespace SatelliteGroundStation.Services
 
                 Console.WriteLine($"✅ Parsed {timedCommand.Steps.Count} steps, total duration: {timedCommand.TotalDuration()}s");
 
+                // İstersen Arduino'ya ham metni de yolluyoruz (telemetri görünür olsun)
                 _serialService.SendCommand(timedCommand.CommandString);
                 Console.WriteLine($"📤 Sent to Arduino: {timedCommand.CommandString}");
 
@@ -74,7 +75,23 @@ namespace SatelliteGroundStation.Services
                     Console.WriteLine($"🎯 Step: {step} (Position: {step.ServoPosition}°)");
                     StepStarted?.Invoke(this, step);
 
-                    await _filterService.ChangeFilterAsync(step.FilterCode);
+                    // --- KRİTİK: adım kodu iki hane mi? (00..33) → yeni overload
+                    var code = step.FilterCode?.Trim();
+                    if (!string.IsNullOrEmpty(code) &&
+                        code.Length == 2 &&
+                        char.IsDigit(code[0]) && char.IsDigit(code[1]))
+                    {
+                        int r1 = code[0] - '0';
+                        int r2 = code[1] - '0';
+                        await _filterService.ChangeFilterAsync(r1, r2);
+                    }
+                    else
+                    {
+                        // Tek harfli eski komutlar için
+                        await _filterService.ChangeFilterAsync(step.Renk1, step.Renk2);
+
+                    }
+
                     await Task.Delay(step.Duration * 1000, _cancellationTokenSource.Token);
                 }
 
@@ -105,7 +122,8 @@ namespace SatelliteGroundStation.Services
 
         public static bool IsTimedCommand(string command)
         {
-            var regex = new System.Text.RegularExpressions.Regex(@"^\d+[rgbpnmfyc]+", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            // Başta süre, sonra renk/filtre kodları: harf (r,g,b,n,...) veya iki haneli (00..33) kombinasyonları destekler
+            var regex = new System.Text.RegularExpressions.Regex(@"^\d+([rgbpnmfyc]|\d{2})+", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
             return regex.IsMatch(command);
         }
 
@@ -115,7 +133,7 @@ namespace SatelliteGroundStation.Services
                 return "Komut boş olamaz";
 
             if (!IsTimedCommand(command))
-                return "Geçersiz format. Örnek: 3g5r2b";
+                return "Geçersiz format. Örnek: 3g5r veya 5 12 10 03 (süreli adımlar)";
 
             var timedCommand = new TimedFilterCommand(command);
             if (!timedCommand.IsValid())

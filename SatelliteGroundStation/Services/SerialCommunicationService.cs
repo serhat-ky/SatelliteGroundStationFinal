@@ -10,7 +10,7 @@ namespace SatelliteGroundStation.Services
     public class SerialCommunicationService : IDisposable
     {
         private SerialPort? _serialPort;
-        private StringBuilder _dataBuffer = new StringBuilder();
+        private readonly StringBuilder _dataBuffer = new StringBuilder();
 
         public event EventHandler<string>? DataReceived;
         public event EventHandler<bool>? ConnectionChanged;
@@ -26,6 +26,8 @@ namespace SatelliteGroundStation.Services
                 if (_serialPort?.IsOpen == true)
                 {
                     Console.WriteLine("🔧 SerialService: Closing existing connection...");
+                    _serialPort.DataReceived -= OnSerialDataReceived;
+                    _serialPort.ErrorReceived -= OnSerialErrorReceived;
                     _serialPort.Close();
                     _serialPort.Dispose();
                 }
@@ -35,15 +37,15 @@ namespace SatelliteGroundStation.Services
                     ReadTimeout = 1000,
                     WriteTimeout = 1000,
                     Encoding = Encoding.ASCII,
-                    DtrEnable = true,  // Important for Arduino R4
-                    RtsEnable = true   // Important for Arduino R4
+                    NewLine = "\n",     // <-- protokol: \n
+                    DtrEnable = true,   // R4 vb. için
+                    RtsEnable = true
                 };
 
                 _serialPort.DataReceived += OnSerialDataReceived;
                 _serialPort.ErrorReceived += OnSerialErrorReceived;
                 _serialPort.Open();
 
-                // Clear any existing data
                 _serialPort.DiscardInBuffer();
                 _serialPort.DiscardOutBuffer();
                 _dataBuffer.Clear();
@@ -82,14 +84,26 @@ namespace SatelliteGroundStation.Services
             }
         }
 
+        /// <summary>
+        /// Komutu tek bir newline ile gönderir. Komut zaten \n içeriyorsa Write, yoksa WriteLine kullanır.
+        /// </summary>
         public void SendCommand(string command)
         {
             try
             {
                 if (_serialPort?.IsOpen == true)
                 {
-                    Console.WriteLine($"📤 Sending command: {command}");
-                    _serialPort.WriteLine(command);
+                    bool endsWithNL = command.EndsWith("\n") || command.EndsWith("\r\n");
+                    if (endsWithNL)
+                    {
+                        Console.WriteLine($"📤 Sending command (raw): {command.Replace("\n", "\\n")}");
+                        _serialPort.Write(command);
+                    }
+                    else
+                    {
+                        Console.WriteLine($"📤 Sending command (line): {command}");
+                        _serialPort.WriteLine(command);
+                    }
                 }
                 else
                 {
@@ -108,31 +122,25 @@ namespace SatelliteGroundStation.Services
             {
                 if (_serialPort?.IsOpen == true)
                 {
-                    // Read all available data
                     string incomingData = _serialPort.ReadExisting();
                     Console.WriteLine($"📡 Raw received: '{incomingData}'");
 
-                    // Add to buffer
                     _dataBuffer.Append(incomingData);
 
-                    // Process complete lines
                     string bufferContent = _dataBuffer.ToString();
                     string[] lines = bufferContent.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
 
                     if (bufferContent.EndsWith("\r") || bufferContent.EndsWith("\n"))
                     {
-                        // All lines are complete
                         _dataBuffer.Clear();
                         ProcessCompleteLines(lines);
                     }
                     else if (lines.Length > 1)
                     {
-                        // All but the last line are complete
                         _dataBuffer.Clear();
-                        _dataBuffer.Append(lines[lines.Length - 1]); // Keep the incomplete line
+                        _dataBuffer.Append(lines[lines.Length - 1]); // son eksik satır
                         ProcessCompleteLines(lines.Take(lines.Length - 1).ToArray());
                     }
-                    // If only one line and not ending with newline, keep in buffer
                 }
             }
             catch (Exception ex)
@@ -147,8 +155,9 @@ namespace SatelliteGroundStation.Services
             {
                 if (!string.IsNullOrWhiteSpace(line))
                 {
-                    Console.WriteLine($"📋 Processing line: '{line.Trim()}'");
-                    DataReceived?.Invoke(this, line.Trim());
+                    var trimmed = line.Trim();
+                    Console.WriteLine($"📋 Processing line: '{trimmed}'");
+                    DataReceived?.Invoke(this, trimmed);
                 }
             }
         }

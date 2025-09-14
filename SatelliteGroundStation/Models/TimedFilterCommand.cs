@@ -19,7 +19,8 @@ namespace SatelliteGroundStation.Models
 
         private void ParseCommand(string command)
         {
-            var regex = new Regex(@"(\d+)([rgbpnmfyc])", RegexOptions.IgnoreCase);
+            // Örn: 3g5r2b1n...
+            var regex = new Regex(@"(\d+)([rgbpnmyc])", RegexOptions.IgnoreCase);
             var matches = regex.Matches(command);
 
             foreach (Match match in matches)
@@ -34,50 +35,72 @@ namespace SatelliteGroundStation.Models
             }
         }
 
-        public bool IsValid()
-        {
-            return Steps.Count > 0 && OriginalCommand.Length > 0;
-        }
-
-        public int TotalDuration()
-        {
-            return Steps.Sum(step => step.Duration);
-        }
+        public bool IsValid() => Steps.Count > 0 && OriginalCommand.Length > 0;
+        public int TotalDuration() => Steps.Sum(step => step.Duration);
     }
 
     public class FilterStep
     {
+        // Eski alanlar
         public string FilterCode { get; set; }
         public int Duration { get; set; }
+
+        // Yeni: iki haneli protokol için
+        public int Renk1 { get; set; } // 0:şeffaf, 1:K, 2:Y, 3:M
+        public int Renk2 { get; set; }
+
+        // (İsteğe bağlı) geriye dönük kullanım için
         public int ServoPosition { get; set; }
 
         public FilterStep(string filterCode, int duration)
         {
             FilterCode = filterCode;
             Duration = duration;
-            ServoPosition = GetServoPosition(filterCode);
+
+            // Harf -> (renk1, renk2) map
+            // Tek filtre hareketi için ikinciyi 0 bırakıyoruz.
+            (Renk1, Renk2) = MapLetterToPair(filterCode);
+
+            // Geriye dönük: tek servo tekeri varsayımı (artık kullanılmıyor ama dursun)
+            ServoPosition = GetLegacyServoPosition(filterCode);
         }
 
-        private int GetServoPosition(string filterCode)
+        private static (int, int) MapLetterToPair(string code)
         {
-            return filterCode.ToUpper() switch
+            // İzinli renkler: 0 şeffaf, 1 kırmızı, 2 yeşil, 3 mavi
+            // Karışımlar: Y=1+2, P=1+3, C=2+3
+            switch (code.ToUpper())
             {
-                "R" => 45,   // Red
-                "G" => 90,   // Green
-                "B" => 135,  // Blue
-                "N" => 0,    // Normal
-                "P" => 270,  // Purple
-                "M" => 180,  // Maroon
-                "F" => 225,  // Forest
-                "Y" => 315,  // Yellow
-                "C" => 360,  // Cyan
+                case "N": return (0, 0);      // Normal/Şeffaf
+                case "R": return (1, 0);
+                case "G": return (2, 0);
+                case "B": return (3, 0);
+                case "Y": return (1, 2);      // Sarı
+                case "P": return (1, 3);      // Mor/Magenta
+                case "C": return (2, 3);      // Camgöbeği
+                case "M": return (1, 1);      // Koyu kırmızı ≈ kırmızı+yine kırmızı (yaklaştırma)
+                case "F": return (2, 2);      // Koyu yeşil ≈ yeşil+yeşil (yaklaştırma)
+                default: return (0, 0);
+            }
+        }
+
+        private static int GetLegacyServoPosition(string filterCode) =>
+            filterCode.ToUpper() switch
+            {
+                "R" => 45,
+                "G" => 90,
+                "B" => 135,
+                "N" => 0,
+                "P" => 180,
+                "M" => 180,
+                "F" => 225,
+                "Y" => 270,
+                "C" => 315,
                 _ => 0
             };
-        }
 
-        public string GetFilterName()
-        {
-            return FilterCode.ToUpper() switch
+        public string GetFilterName() =>
+            FilterCode.ToUpper() switch
             {
                 "R" => "Kırmızı",
                 "G" => "Yeşil",
@@ -90,11 +113,7 @@ namespace SatelliteGroundStation.Models
                 "C" => "Camgöbeği",
                 _ => "Bilinmeyen"
             };
-        }
 
-        public override string ToString()
-        {
-            return $"{Duration}s {GetFilterName()}";
-        }
+        public override string ToString() => $"{Duration}s {GetFilterName()} -> ({Renk1}{Renk2})";
     }
 }

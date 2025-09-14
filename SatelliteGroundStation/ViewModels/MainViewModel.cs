@@ -17,7 +17,6 @@ using System.Threading.Tasks;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 
-
 namespace SatelliteGroundStation.ViewModels
 {
     public class MainViewModel : ViewModelBase, IDisposable
@@ -29,10 +28,10 @@ namespace SatelliteGroundStation.ViewModels
         private string _commandCode = "";
         private ICommand? _sendCommandCodeCommand;
 
-        // ↓ Video capture service
+        // Video capture service
         private readonly VideoCaptureService _videoCaptureService;
 
-        // ↓ Map service
+        // Map service
         private readonly MapService _mapService;
 
         // Video properties private fields
@@ -48,6 +47,16 @@ namespace SatelliteGroundStation.ViewModels
         private string _connectionStatus = "Bağlı Değil";
         private string _selectedComPort = "";
         private int _selectedBaudRate = 9600;
+
+        // Multispektral Filtre Properties
+        private string _firstSpectralColor = "Transparent";
+        private string _secondSpectralColor = "Transparent";
+        private string _mixedSpectralColor = "Transparent";
+        private string _firstColorValue = "0";
+        private string _secondColorValue = "0";
+        private string _spectralInputCode = "";
+        private string _receivedSpectralData = "";
+        private ICommand? _sendSpectralCodeCommand;
 
         // Telemetry data
         private TelemetryData? _currentTelemetry;
@@ -151,7 +160,8 @@ namespace SatelliteGroundStation.ViewModels
             {
                 return _purpleFilterCommand ??= new RelayCommand(async () =>
                 {
-                    await _filterService.SetPurpleFilterAsync();
+                    // Mor = Kırmızı (1) + Mavi (3)
+                    await _filterService.ChangeFilterAsync(1, 3);
                 });
             }
         }
@@ -162,12 +172,19 @@ namespace SatelliteGroundStation.ViewModels
             {
                 return _sendCommandCodeCommand ??= new RelayCommand(
                     SendCommandCode,
-                    () =>
-                    {
-                        bool canExecute = IsConnected && !string.IsNullOrEmpty(CommandCode);
-                        Console.WriteLine($"🎯 SendCommand CanExecute: {canExecute}");
-                        return canExecute;
-                    }
+                    () => IsConnected && !string.IsNullOrEmpty(CommandCode)
+                );
+            }
+        }
+
+        // Multispektral Filtre için SendSpectralCodeCommand
+        public ICommand SendSpectralCodeCommand
+        {
+            get
+            {
+                return _sendSpectralCodeCommand ??= new RelayCommand(
+                    SendSpectralCode,
+                    () => IsConnected && !string.IsNullOrEmpty(SpectralInputCode) && SpectralInputCode.Length == 2
                 );
             }
         }
@@ -186,9 +203,9 @@ namespace SatelliteGroundStation.ViewModels
             _filterService = new MultispektralFiltreService(_serialService);
             _timedFilterService = new TimedFilterService(_serialService, _filterService);
 
-            _filterService.FilterChanged += OnFilterStateChanged;      //
-            _filterService.CommandSent += OnFilterCommandSentEvent;    // 
-            _filterService.ErrorOccurred += OnFilterErrorEvent;        //         
+            _filterService.FilterChanged += OnFilterStateChanged;
+            _filterService.CommandSent += OnFilterCommandSentEvent;
+            _filterService.ErrorOccurred += OnFilterErrorEvent;
 
             // Initialize collections
             TelemetryDataCollection = new ObservableCollection<TelemetryData>();
@@ -453,6 +470,7 @@ namespace SatelliteGroundStation.ViewModels
             {
                 SetProperty(ref _isConnected, value);
                 ConnectionStatus = value ? "Bağlı" : "Bağlı Değil";
+                CommandManager.InvalidateRequerySuggested();
             }
         }
 
@@ -486,9 +504,59 @@ namespace SatelliteGroundStation.ViewModels
             set
             {
                 SetProperty(ref _commandCode, value);
-                CommandManager.InvalidateRequerySuggested(); // Command'ın CanExecute'unu güncelle
-                Console.WriteLine($"🎯 CommandCode changed to: '{value}' (Length: {value?.Length})");
+                CommandManager.InvalidateRequerySuggested();
             }
+        }
+
+        // Multispektral Filtre Properties
+        public string FirstSpectralColor
+        {
+            get => _firstSpectralColor;
+            set => SetProperty(ref _firstSpectralColor, value);
+        }
+
+        public string SecondSpectralColor
+        {
+            get => _secondSpectralColor;
+            set => SetProperty(ref _secondSpectralColor, value);
+        }
+
+        public string MixedSpectralColor
+        {
+            get => _mixedSpectralColor;
+            set => SetProperty(ref _mixedSpectralColor, value);
+        }
+
+        public string FirstColorValue
+        {
+            get => _firstColorValue;
+            set => SetProperty(ref _firstColorValue, value);
+        }
+
+        public string SecondColorValue
+        {
+            get => _secondColorValue;
+            set => SetProperty(ref _secondColorValue, value);
+        }
+
+        public string SpectralInputCode
+        {
+            get => _spectralInputCode;
+            set
+            {
+                if (SetProperty(ref _spectralInputCode, value))
+                {
+                    // Kod girildiğinde otomatik olarak renkleri güncelle
+                    UpdateSpectralColors(value);
+                    CommandManager.InvalidateRequerySuggested();
+                }
+            }
+        }
+
+        public string ReceivedSpectralData
+        {
+            get => _receivedSpectralData;
+            set => SetProperty(ref _receivedSpectralData, value);
         }
 
         public double CurrentTemperature
@@ -535,26 +603,26 @@ namespace SatelliteGroundStation.ViewModels
 
         public LiveChartsCore.SkiaSharpView.Axis[] XAxes { get; } = new[]
         {
-           new LiveChartsCore.SkiaSharpView.Axis
-    {
-        Name = "Zaman",
-        LabelsRotation = 0,
-        TextSize = 10,
-        LabelsPaint = new SolidColorPaint(SKColors.LightGray),
-        UnitWidth = TimeSpan.FromMinutes(1).Ticks,
-        MinStep = TimeSpan.FromMinutes(5).Ticks,
-        Labeler = value => new DateTime((long)value).ToString("HH:mm")
-    }
-};
+            new LiveChartsCore.SkiaSharpView.Axis
+            {
+                Name = "Zaman",
+                LabelsRotation = 0,
+                TextSize = 10,
+                LabelsPaint = new SolidColorPaint(SKColors.LightGray),
+                UnitWidth = TimeSpan.FromMinutes(1).Ticks,
+                MinStep = TimeSpan.FromMinutes(5).Ticks,
+                Labeler = value => new DateTime((long)value).ToString("HH:mm")
+            }
+        };
 
         public LiveChartsCore.SkiaSharpView.Axis[] YAxes { get; } = new[]
         {
-           new LiveChartsCore.SkiaSharpView.Axis
-    {
-        TextSize = 10,
-        LabelsPaint = new SolidColorPaint(SKColors.LightGray)
-    }
-};
+            new LiveChartsCore.SkiaSharpView.Axis
+            {
+                TextSize = 10,
+                LabelsPaint = new SolidColorPaint(SKColors.LightGray)
+            }
+        };
 
         // Alarm system status properties
         public bool Subsystem1Status
@@ -606,7 +674,6 @@ namespace SatelliteGroundStation.ViewModels
             Console.WriteLine($"🚀 Quick command: {command}");
             CommandCode = command;
 
-            // SendCommandCode metodunu çağır
             if (TimedFilterService.IsTimedCommand(command))
             {
                 await _timedFilterService.ExecuteTimedSequenceAsync(command);
@@ -645,6 +712,8 @@ namespace SatelliteGroundStation.ViewModels
         }
 
         public VideoResolution[] AvailableVideoResolutions { get; } = Enum.GetValues<VideoResolution>();
+
+        public FilterData FilterData => _filterService.FilterData;
 
         #endregion
 
@@ -701,22 +770,38 @@ namespace SatelliteGroundStation.ViewModels
 
         private void SendCommandCode()
         {
-            Console.WriteLine($"📤 SendCommandCode executed - Code: '{CommandCode}'");
-            Console.WriteLine($"📤 IsConnected: {IsConnected}");
-
             if (!string.IsNullOrEmpty(CommandCode))
             {
-                Console.WriteLine($"📤 Sending command: {CommandCode}");
                 _serialService.SendCommand(CommandCode);
-                Console.WriteLine($"✅ Command '{CommandCode}' sent to Arduino");
-
                 CommandCode = "";
-                Console.WriteLine("🧹 CommandCode cleared");
             }
             else
             {
-                Console.WriteLine("❌ CommandCode is empty or null");
                 MessageBox.Show("Lütfen bir komut kodu girin!", "Hata", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        }
+
+        // Multispektral Filtre için SendSpectralCode metodu (YENİ: iki haneli sayılarla)
+        private async void SendSpectralCode()
+        {
+            var code = SpectralInputCode?.Trim();
+
+            if (!string.IsNullOrEmpty(code) && code.Length == 2 && code.All(ch => ch >= '0' && ch <= '3'))
+            {
+                int r1 = code[0] - '0';
+                int r2 = code[1] - '0';
+
+                // Servis üzerinden iki haneli komut gönder
+                await _filterService.ChangeFilterAsync(r1, r2);
+
+                // UI güncellemeleri
+                ReceivedSpectralData = code;
+                UpdateSpectralColors(code);
+            }
+            else
+            {
+                MessageBox.Show("Kod 2 haneli ve her hane 0–3 arasında olmalı (örn: 01, 23, 12).",
+                    "Hata", MessageBoxButton.OK, MessageBoxImage.Warning);
             }
         }
 
@@ -725,27 +810,27 @@ namespace SatelliteGroundStation.ViewModels
             _serialService.SendCommand($"FILTER_{filter}");
         }
 
-        public FilterData FilterData => _filterService.FilterData;
-
         #endregion
 
         #region Event Handlers
 
         private void OnDataReceived(object? sender, string data)
         {
-            Console.WriteLine($"📡 Raw data received: '{data}'");
-
             Application.Current.Dispatcher.Invoke(() =>
             {
-                var telemetryData = _parsingService.ParseTelemetryData(data);
-                if (telemetryData != null)
+                // Spektral ACK (yeni/alternatif protokoller için geriye uyumluluk)
+                if (data.StartsWith("SPECTRAL_ACK:", StringComparison.OrdinalIgnoreCase))
                 {
-                    Console.WriteLine($"✅ Data parsed: T={telemetryData.Temperature}°C");
-                    ProcessTelemetryData(telemetryData);
+                    ProcessSpectralData(data);
                 }
                 else
                 {
-                    Console.WriteLine($"❌ Failed to parse data: '{data}'");
+                    // Normal telemetri verisi
+                    var telemetryData = _parsingService.ParseTelemetryData(data);
+                    if (telemetryData != null)
+                    {
+                        ProcessTelemetryData(telemetryData);
+                    }
                 }
             });
         }
@@ -755,14 +840,9 @@ namespace SatelliteGroundStation.ViewModels
             Application.Current.Dispatcher.Invoke(() =>
             {
                 IsConnected = isConnected;
-                if (!isConnected)
-                {
-                    SatelliteStatus = "Bağlantı Kesildi";
-                }
+                if (!isConnected) SatelliteStatus = "Bağlantı Kesildi";
             });
         }
-
-
 
         #endregion
 
@@ -770,8 +850,6 @@ namespace SatelliteGroundStation.ViewModels
 
         private void ProcessTelemetryData(TelemetryData telemetryData)
         {
-            Console.WriteLine($"🔥 ProcessTelemetryData called: T={telemetryData.Temperature:F1}°C, P={telemetryData.Pressure:F0}Pa");
-
             _currentTelemetry = telemetryData;
 
             // Update current values
@@ -796,8 +874,6 @@ namespace SatelliteGroundStation.ViewModels
             GyroYData.Add(new DataPoint(now, telemetryData.GyroY));
             GyroZData.Add(new DataPoint(now, telemetryData.GyroZ));
 
-            Console.WriteLine($"📊 Chart points added: Temp={TemperatureData.Count}, Pressure={PressureData.Count}");
-
             // Keep only last 100 points for performance
             if (TemperatureData.Count > 100) TemperatureData.RemoveAt(0);
             if (PressureData.Count > 100) PressureData.RemoveAt(0);
@@ -807,11 +883,9 @@ namespace SatelliteGroundStation.ViewModels
             if (GyroYData.Count > 100) GyroYData.RemoveAt(0);
             if (GyroZData.Count > 100) GyroZData.RemoveAt(0);
 
-            // Limit telemetry data collection to 1000 entries
+            // Limit telemetry data collection
             if (TelemetryDataCollection.Count > 1000)
-            {
                 TelemetryDataCollection.RemoveAt(TelemetryDataCollection.Count - 1);
-            }
 
             if (_isMapInitialized && telemetryData.GpsLatitude != 0 && telemetryData.GpsLongitude != 0)
             {
@@ -834,24 +908,96 @@ namespace SatelliteGroundStation.ViewModels
             SatelliteStatus = "Veri Alınıyor";
         }
 
+        // Spektral veri işleme
+        private void ProcessSpectralData(string data)
+        {
+            if (data.StartsWith("SPECTRAL_ACK:", StringComparison.OrdinalIgnoreCase))
+            {
+                string code = data.Substring(13).Trim();
+                ReceivedSpectralData = code;
+                UpdateSpectralColors(code);
+            }
+        }
+
+        // Multispektral renk güncelleme metodları
+        private void UpdateSpectralColors(string code)
+        {
+            if (string.IsNullOrEmpty(code) || code.Length != 2) return;
+
+            char firstChar = code[0];
+            FirstColorValue = firstChar.ToString();
+            FirstSpectralColor = GetColorFromCode(firstChar);
+
+            char secondChar = code[1];
+            SecondColorValue = secondChar.ToString();
+            SecondSpectralColor = GetColorFromCode(secondChar);
+
+            MixedSpectralColor = CalculateMixedColor(firstChar, secondChar);
+        }
+
+        // Önizleme (sadece görsel)
+        private void PreviewSpectralColors(string code)
+        {
+            if (string.IsNullOrEmpty(code) || code.Length != 2)
+            {
+                FirstColorValue = "";
+                SecondColorValue = "";
+                FirstSpectralColor = "Gray";
+                SecondSpectralColor = "Gray";
+                MixedSpectralColor = "Gray";
+                return;
+            }
+
+            char firstChar = code[0];
+            FirstColorValue = firstChar.ToString();
+            FirstSpectralColor = GetColorFromCode(firstChar);
+
+            char secondChar = code[1];
+            SecondColorValue = secondChar.ToString();
+            SecondSpectralColor = GetColorFromCode(secondChar);
+
+            MixedSpectralColor = CalculateMixedColor(firstChar, secondChar);
+        }
+
+        private string GetColorFromCode(char code)
+        {
+            return code switch
+            {
+                '0' => "Transparent",
+                '1' => "Red",
+                '2' => "Green",
+                '3' => "Blue",
+                _ => "Gray"
+            };
+        }
+
+        private string CalculateMixedColor(char code1, char code2)
+        {
+            if (code1 == '0' && code2 == '0') return "Transparent";
+            if (code1 == '0') return GetColorFromCode(code2);
+            if (code2 == '0') return GetColorFromCode(code1);
+            if (code1 == code2) return GetColorFromCode(code1);
+
+            string combination = new string(new[] { code1, code2 }.OrderBy(c => c).ToArray());
+            return combination switch
+            {
+                "12" => "#FF8800", // turuncu
+                "13" => "#FF00FF", // magenta
+                "23" => "#00FFFF", // cyan
+                _ => "Purple"
+            };
+        }
+
         private void RefreshComPorts()
         {
             AvailableComPorts.Clear();
             var ports = _serialService.GetAvailablePorts();
-            foreach (var port in ports)
-            {
-                AvailableComPorts.Add(port);
-            }
-
-            if (AvailableComPorts.Any())
-            {
-                SelectedComPort = AvailableComPorts.First();
-            }
+            foreach (var port in ports) AvailableComPorts.Add(port);
+            if (AvailableComPorts.Any()) SelectedComPort = AvailableComPorts.First();
         }
 
         private void GenerateSampleData()
         {
-            // Generate some sample data for demonstration
             var random = new Random();
             for (int i = 0; i < 50; i++)
             {
@@ -877,22 +1023,11 @@ namespace SatelliteGroundStation.ViewModels
 
         private void TestFormat2Parsing()
         {
-            Console.WriteLine("=== FORMAT 2 PARSING TEST ===");
-
-            // Örnek veri ile grafikleri test et
             string testData = "$DATA,12345,25.5,1013.2,1500.0,45.2,3.85,12.5,-8.3,15.7";
             var result = _parsingService.ParseTelemetryData(testData);
-
-            if (result != null)
-            {
-                ProcessTelemetryData(result);
-                Console.WriteLine("✅ Test data added to charts!");
-            }
-            else
-            {
-                Console.WriteLine("❌ Test parsing failed!");
-            }
+            if (result != null) ProcessTelemetryData(result);
         }
+
         #endregion
 
         #region Filter Event Handlers

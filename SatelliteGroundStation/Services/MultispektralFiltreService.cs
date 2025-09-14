@@ -9,7 +9,12 @@ namespace SatelliteGroundStation.Services
     {
         private readonly SerialCommunicationService _serialService;
         private Timer? _autoTimer;
-        private readonly string[] _autoSequence = { "R", "G", "B", "N" };
+
+        // Otomatik mod için örnek dizi (tamamen örnek)
+        private readonly (int r1, int r2)[] _autoSequence = new[]
+        {
+            (0,0), (1,0), (2,0), (3,0), (1,3), (0,0)
+        };
         private int _currentSequenceIndex = 0;
 
         public FilterData FilterData { get; } = new FilterData();
@@ -22,59 +27,51 @@ namespace SatelliteGroundStation.Services
         {
             _serialService = serialService ?? throw new ArgumentNullException(nameof(serialService));
             _serialService.DataReceived += OnSerialDataReceived;
-
             Console.WriteLine("🎯 MultispektralFiltreService initialized");
         }
 
-        // Manuel filtre değiştirme
-        public async Task<bool> ChangeFilterAsync(string filterCode)
+        /// <summary>
+        /// Yeni protokol: iki haneli (0..3)(0..3) kodu "SPECTRAL:xy" olarak gönderir.
+        /// Arduino cevabı: "SPECTRAL_ACK:xy"
+        /// </summary>
+        public async Task<bool> ChangeFilterAsync(int renk1, int renk2)
         {
             try
             {
-                Console.WriteLine($"🎯 Changing filter to: {filterCode}");
+                if (renk1 is < 0 or > 3) throw new ArgumentOutOfRangeException(nameof(renk1));
+                if (renk2 is < 0 or > 3) throw new ArgumentOutOfRangeException(nameof(renk2));
 
-                if (!FilterCommand.FilterPositions.ContainsKey(filterCode))
-                {
-                    throw new ArgumentException($"Geçersiz filtre kodu: {filterCode}");
-                }
+                var code = $"{renk1}{renk2}";
+                var cmd = $"SPECTRAL:{code}";
 
                 FilterData.IsChanging = true;
 
-                var command = FilterCommand.CreateCommand(filterCode);
-                _serialService.SendCommand(command.CommandString);
+                _serialService.SendCommand(cmd);
+                CommandSent?.Invoke(this, cmd);
 
-                CommandSent?.Invoke(this, command.CommandString);
-                Console.WriteLine($"📤 Filter command sent: {command.CommandString}");
+                // mekanik için küçük bekleme (isteğe göre ayarla)
+                await Task.Delay(1200);
 
-                // Servo hareket süresini bekle
-                await Task.Delay(2000);
-
-                FilterData.CurrentFilter = filterCode;
-                FilterData.ServoPosition = command.ServoPosition;
+                FilterData.CurrentFilter = code;
                 FilterData.LastChangeTime = DateTime.Now;
                 FilterData.IsChanging = false;
 
-                FilterChanged?.Invoke(this, filterCode);
-                Console.WriteLine($"✅ Filter changed successfully to: {FilterData.FilterDescription}");
-
+                FilterChanged?.Invoke(this, code);
                 return true;
             }
             catch (Exception ex)
             {
                 FilterData.IsChanging = false;
-                Console.WriteLine($"❌ Filter change error: {ex.Message}");
                 ErrorOccurred?.Invoke(this, ex.Message);
                 return false;
             }
         }
 
-        // Otomatik mod kontrolü
         public void StartAutoMode(int intervalSeconds = 5)
         {
             try
             {
-                StopAutoMode(); // Mevcut timer'ı durdur
-
+                StopAutoMode();
                 FilterData.AutoMode = true;
                 FilterData.AutoInterval = intervalSeconds;
 
@@ -82,65 +79,54 @@ namespace SatelliteGroundStation.Services
                 _autoTimer.Elapsed += OnAutoTimerElapsed;
                 _autoTimer.AutoReset = true;
                 _autoTimer.Start();
-
-                Console.WriteLine($"🔄 Auto mode started with {intervalSeconds}s interval");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"❌ Auto mode start error: {ex.Message}");
                 ErrorOccurred?.Invoke(this, ex.Message);
             }
         }
 
         public void StopAutoMode()
         {
-            if (_autoTimer != null)
-            {
-                _autoTimer.Stop();
-                _autoTimer.Dispose();
-                _autoTimer = null;
-            }
-
+            _autoTimer?.Stop();
+            _autoTimer?.Dispose();
+            _autoTimer = null;
             FilterData.AutoMode = false;
-            Console.WriteLine("⏹️ Auto mode stopped");
         }
 
         private async void OnAutoTimerElapsed(object? sender, ElapsedEventArgs e)
         {
             try
             {
-                string nextFilter = _autoSequence[_currentSequenceIndex];
-                await ChangeFilterAsync(nextFilter);
-
+                var (r1, r2) = _autoSequence[_currentSequenceIndex];
+                await ChangeFilterAsync(r1, r2);
                 _currentSequenceIndex = (_currentSequenceIndex + 1) % _autoSequence.Length;
-                Console.WriteLine($"🔄 Auto sequence: {nextFilter} -> Next: {_autoSequence[_currentSequenceIndex]}");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"❌ Auto timer error: {ex.Message}");
                 ErrorOccurred?.Invoke(this, ex.Message);
             }
         }
 
-        // Arduino'dan gelen filtre durum verilerini işle
+        // Arduino'dan gelen satırlar
         private void OnSerialDataReceived(object? sender, string data)
         {
             try
             {
-                if (string.IsNullOrWhiteSpace(data))
-                    return;
+                if (string.IsNullOrWhiteSpace(data)) return;
+                var line = data.Trim();
 
-                data = data.Trim().ToUpper();
-
-                // Filtre durum mesajları: $FILTER_STATUS,R,45,OK
-                if (data.StartsWith("$FILTER_STATUS,"))
+                // Beklenen ACK: SPECTRAL_ACK:xy
+                if (line.StartsWith("SPECTRAL_ACK:", StringComparison.OrdinalIgnoreCase))
                 {
-                    ParseFilterStatus(data);
-                }
-                // Filtre onay mesajları: $FILTER_ACK,G,90
-                else if (data.StartsWith("$FILTER_ACK,"))
-                {
-                    ParseFilterAck(data);
+                    var code = line.Substring(13).Trim();
+                    if (code.Length == 2)
+                    {
+                        FilterData.CurrentFilter = code;
+                        FilterData.IsChanging = false;
+                        FilterData.LastChangeTime = DateTime.Now;
+                        FilterChanged?.Invoke(this, code);
+                    }
                 }
             }
             catch (Exception ex)
@@ -149,101 +135,17 @@ namespace SatelliteGroundStation.Services
             }
         }
 
-        private void ParseFilterStatus(string data)
-        {
-            try
-            {
-                // Format: $FILTER_STATUS,R,45,OK
-                var parts = data.Substring(15).Split(','); // "$FILTER_STATUS," kısmını atla
-
-                if (parts.Length >= 3)
-                {
-                    string filterCode = parts[0];
-                    int position = int.Parse(parts[1]);
-                    string status = parts[2];
-
-                    FilterData.CurrentFilter = filterCode;
-                    FilterData.ServoPosition = position;
-                    FilterData.IsChanging = status != "OK";
-
-                    Console.WriteLine($"📡 Filter status: {filterCode} at {position}° - {status}");
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"❌ Filter status parsing error: {ex.Message}");
-            }
-        }
-
-        private void ParseFilterAck(string data)
-        {
-            try
-            {
-                // Format: $FILTER_ACK,G,90
-                var parts = data.Substring(12).Split(','); // "$FILTER_ACK," kısmını atla
-
-                if (parts.Length >= 2)
-                {
-                    string filterCode = parts[0];
-                    int position = int.Parse(parts[1]);
-
-                    FilterData.CurrentFilter = filterCode;
-                    FilterData.ServoPosition = position;
-                    FilterData.IsChanging = false;
-                    FilterData.LastChangeTime = DateTime.Now;
-
-                    Console.WriteLine($"✅ Filter ACK: {filterCode} confirmed at {position}°");
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"❌ Filter ACK parsing error: {ex.Message}");
-            }
-        }
-
-        // Hızlı erişim metodları
-        public Task<bool> SetRedFilterAsync() => ChangeFilterAsync("R");
-        public Task<bool> SetGreenFilterAsync() => ChangeFilterAsync("G");
-        public Task<bool> SetBlueFilterAsync() => ChangeFilterAsync("B");
-        public Task<bool> SetNormalFilterAsync() => ChangeFilterAsync("N");
-        public Task<bool> SetPurpleFilterAsync() => ChangeFilterAsync("P");
-        public Task<bool> SetYellowFilterAsync() => ChangeFilterAsync("Y");
-        public Task<bool> SetCyanFilterAsync() => ChangeFilterAsync("C");
-
-        // Sıfırlama
-        public async Task<bool> ResetToNormalAsync()
-        {
-            Console.WriteLine("🔄 Resetting filter to normal position...");
-            return await ChangeFilterAsync("N");
-        }
-
-        // Test fonksiyonu
-        public async Task RunFilterTestAsync()
-        {
-            Console.WriteLine("🧪 Starting filter test sequence...");
-
-            string[] testSequence = { "N", "R", "G", "B", "N" };
-
-            foreach (string filter in testSequence)
-            {
-                Console.WriteLine($"🧪 Testing filter: {filter}");
-                await ChangeFilterAsync(filter);
-                await Task.Delay(3000); // Her filtre için 3 saniye bekle
-            }
-
-            Console.WriteLine("🧪 Filter test completed!");
-        }
+        // Kısayollar — ViewModel butonları için (tek filtreyi oynatmak istiyorsan ikinciyi 0 bırakıyoruz)
+        public Task<bool> SetRedFilterAsync() => ChangeFilterAsync(1, 0);
+        public Task<bool> SetGreenFilterAsync() => ChangeFilterAsync(2, 0);
+        public Task<bool> SetBlueFilterAsync() => ChangeFilterAsync(3, 0);
+        public Task<bool> SetPurpleFilterAsync() => ChangeFilterAsync(1, 3); // Kırmızı + Mavi
+        public Task<bool> ResetToNormalAsync() => ChangeFilterAsync(0, 0);
 
         public void Dispose()
         {
             StopAutoMode();
-
-            if (_serialService != null)
-            {
-                _serialService.DataReceived -= OnSerialDataReceived;
-            }
-
-            Console.WriteLine("🎯 MultispektralFiltreService disposed");
+            _serialService.DataReceived -= OnSerialDataReceived;
         }
     }
 }
