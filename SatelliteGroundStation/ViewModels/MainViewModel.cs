@@ -1,4 +1,6 @@
-﻿using System;
+﻿// PART 1 OF MainViewModel.cs
+
+using System;
 using System.Collections.ObjectModel;
 using System.IO.Ports;
 using System.Linq;
@@ -68,6 +70,24 @@ namespace SatelliteGroundStation.ViewModels
         private double _gpsLatitude;
         private double _gpsLongitude;
 
+        // Telemetry simulation
+        private readonly TelemetrySimulatorService _simService;
+        public ICommand StartSimulationCommand { get; }
+        public ICommand StopSimulationCommand { get; }
+        private bool _isSimulationRunning;
+        public bool IsSimulationRunning
+        {
+            get => _isSimulationRunning;
+            set
+            {
+                if (SetProperty(ref _isSimulationRunning, value))
+                {
+                    // Sim başlat/durdur butonlarının CanExecute durumlarını yenile
+                    CommandManager.InvalidateRequerySuggested();
+                }
+            }
+        }
+
         // Alarm system indicators
         private bool _subsystem1Status = true;
         private bool _subsystem2Status = true;
@@ -93,6 +113,31 @@ namespace SatelliteGroundStation.ViewModels
         public ISeries[] SpeedSeries { get; }
         public ISeries[] BatteryVoltageSeries { get; }
         public ISeries[] AxisDataSeries { get; }
+
+        // ---- X Axis (zaman) ----
+        public Axis[] XAxes { get; } =
+        {
+            new Axis
+            {
+                Name = "Zaman",
+                LabelsRotation = 0,
+                TextSize = 10,
+                LabelsPaint = new SolidColorPaint(SKColors.LightGray),
+                UnitWidth = TimeSpan.FromMinutes(1).Ticks,
+                MinStep = TimeSpan.FromMinutes(5).Ticks,
+                Labeler = value => new DateTime((long)value).ToString("HH:mm")
+            }
+        };
+
+        // ---- SABİT/DİNAMİK EKSEN: her grafik için ayrı Y axes ----
+        public Axis[] TemperatureYAxes { get; } = { new Axis { TextSize = 10, LabelsPaint = new SolidColorPaint(SKColors.LightGray) } };
+        public Axis[] PressureYAxes { get; } = { new Axis { TextSize = 10, LabelsPaint = new SolidColorPaint(SKColors.LightGray) } };
+        public Axis[] SpeedYAxes { get; } = { new Axis { TextSize = 10, LabelsPaint = new SolidColorPaint(SKColors.LightGray) } };
+        public Axis[] BatteryYAxes { get; } = { new Axis { TextSize = 10, LabelsPaint = new SolidColorPaint(SKColors.LightGray) } };
+        public Axis[] AxisYAxes { get; } = { new Axis { TextSize = 10, LabelsPaint = new SolidColorPaint(SKColors.LightGray) } };
+
+        // (Eski YAxes duruyor; XAML'i yeni per-graph YAxes’lere bağlayacaksın)
+        public Axis[] YAxes { get; } = { new Axis { TextSize = 10, LabelsPaint = new SolidColorPaint(SKColors.LightGray) } };
 
         // Available COM ports
         public ObservableCollection<string> AvailableComPorts { get; }
@@ -160,7 +205,7 @@ namespace SatelliteGroundStation.ViewModels
             {
                 return _purpleFilterCommand ??= new RelayCommand(async () =>
                 {
-                    // Mor = Kırmızı (1) + Mavi (3)
+                    // Mor = Kırmızı (1) + Mavi (3) — yeni iki haneli protokol için örnek
                     await _filterService.ChangeFilterAsync(1, 3);
                 });
             }
@@ -191,6 +236,31 @@ namespace SatelliteGroundStation.ViewModels
 
         private TimedFilterService _timedFilterService;
 
+        // ---- SABİT EKSEN KONFİG ----
+        private (double min, double max) _axisTemp = (20.0, 30.0);   // °C
+        private (double min, double max) _axisPres = (980.0, 1050.0);// hPa
+        private (double min, double max) _axisSpeed = (0.0, 15.0);   // m/s
+        private (double min, double max) _axisBatt = (3.4, 4.2);     // V
+        private (double min, double max) _axisGyro = (-20.0, 20.0);  // °/s
+
+        private bool _useFixedAxes = true; // varsayılan: sabit eksenler açık
+        public bool UseFixedAxes
+        {
+            get => _useFixedAxes;
+            set
+            {
+                if (SetProperty(ref _useFixedAxes, value))
+                    ApplyAxisMode();
+            }
+        }
+
+        // ---- DİNAMİK EKSEN için RollingRange stabilizer’ları ----
+        private readonly RollingRange _tempRange = new(180, 0.08);
+        private readonly RollingRange _presRange = new(180, 0.03);
+        private readonly RollingRange _speedRange = new(180, 0.10);
+        private readonly RollingRange _battRange = new(180, 0.02);
+        private readonly RollingRange _gyroRange = new(180, 0.15);
+
         public MainViewModel()
         {
             _serialService = new SerialCommunicationService();
@@ -207,6 +277,10 @@ namespace SatelliteGroundStation.ViewModels
             _filterService.CommandSent += OnFilterCommandSentEvent;
             _filterService.ErrorOccurred += OnFilterErrorEvent;
 
+            // --- Telemetri Simülatörü ---
+            _simService = new TelemetrySimulatorService();
+            _simService.LineGenerated += OnSimLineGenerated;
+
             // Initialize collections
             TelemetryDataCollection = new ObservableCollection<TelemetryData>();
             TemperatureData = new ObservableCollection<DataPoint>();
@@ -216,8 +290,8 @@ namespace SatelliteGroundStation.ViewModels
             GyroXData = new ObservableCollection<DataPoint>();
             GyroYData = new ObservableCollection<DataPoint>();
             GyroZData = new ObservableCollection<DataPoint>();
-            AvailableComPorts = new ObservableCollection<string>();
             AvailableVideoDevices = new ObservableCollection<VideoDeviceInfo>();
+            AvailableComPorts = new ObservableCollection<string>();
 
             // Initialize chart series
             TemperatureSeries = new ISeries[]
@@ -238,7 +312,7 @@ namespace SatelliteGroundStation.ViewModels
                 new LineSeries<DataPoint>
                 {
                     Values = PressureData,
-                    Name = "Basınç (Pa)",
+                    Name = "Basınç (hPa)",
                     Stroke = new SolidColorPaint(SKColors.Blue) { StrokeThickness = 2 },
                     Fill = null,
                     GeometrySize = 0,
@@ -316,6 +390,15 @@ namespace SatelliteGroundStation.ViewModels
             CenterMapCommand = new RelayCommand(async () => await CenterMapOnSatelliteAsync());
             ClearTrackCommand = new RelayCommand(ClearGpsTrack);
 
+            // *** YENİ: Simülasyon komutları ***
+            StartSimulationCommand = new RelayCommand(
+                StartSimulation,
+                () => !IsSimulationRunning);
+
+            StopSimulationCommand = new RelayCommand(
+                StopSimulation,
+                () => IsSimulationRunning);
+
             // Subscribe to serial service events
             _serialService.DataReceived += OnDataReceived;
             _serialService.ConnectionChanged += OnConnectionChanged;
@@ -330,10 +413,12 @@ namespace SatelliteGroundStation.ViewModels
             // Load video devices
             RefreshVideoDevices();
 
-            // Generate sample data for demonstration
+            // örnek veriler (istersen kapat)
             GenerateSampleData();
-
             TestFormat2Parsing();
+
+            // SABİT/DİNAMİK eksen modunu uygula
+            ApplyAxisMode();
         }
 
         #region Video Methods
@@ -343,17 +428,11 @@ namespace SatelliteGroundStation.ViewModels
             if (SelectedVideoDevice != null)
             {
                 var success = _videoCaptureService.StartCapture(SelectedVideoDevice.Index, SelectedVideoResolution);
-                if (success)
-                {
-                    IsVideoCapturing = true;
-                }
+                if (success) IsVideoCapturing = true;
             }
         }
 
-        private bool CanStartVideoCapture()
-        {
-            return !IsVideoCapturing && SelectedVideoDevice != null;
-        }
+        private bool CanStartVideoCapture() => !IsVideoCapturing && SelectedVideoDevice != null;
 
         private void StopVideoCapture()
         {
@@ -366,37 +445,27 @@ namespace SatelliteGroundStation.ViewModels
         {
             AvailableVideoDevices.Clear();
             var devices = _videoCaptureService.GetAvailableDevices();
-            foreach (var device in devices)
-            {
-                AvailableVideoDevices.Add(device);
-            }
-
-            if (AvailableVideoDevices.Any())
-            {
-                SelectedVideoDevice = AvailableVideoDevices.First();
-            }
+            foreach (var device in devices) AvailableVideoDevices.Add(device);
+            if (AvailableVideoDevices.Any()) SelectedVideoDevice = AvailableVideoDevices.First();
         }
 
         private void SaveVideoFrame()
         {
-            if (CurrentVideoFrame != null)
+            if (CurrentVideoFrame == null) return;
+
+            var saveDialog = new Microsoft.Win32.SaveFileDialog
             {
-                var saveDialog = new Microsoft.Win32.SaveFileDialog
-                {
-                    Filter = "PNG files (*.png)|*.png|JPEG files (*.jpg)|*.jpg",
-                    DefaultExt = "png"
-                };
+                Filter = "PNG files (*.png)|*.png|JPEG files (*.jpg)|*.jpg",
+                DefaultExt = "png"
+            };
 
-                if (saveDialog.ShowDialog() == true)
-                {
-                    var encoder = new PngBitmapEncoder();
-                    encoder.Frames.Add(BitmapFrame.Create(CurrentVideoFrame));
-
-                    using var fileStream = new System.IO.FileStream(saveDialog.FileName, System.IO.FileMode.Create);
-                    encoder.Save(fileStream);
-
-                    MessageBox.Show("Frame başarıyla kaydedildi.", "Başarılı", MessageBoxButton.OK, MessageBoxImage.Information);
-                }
+            if (saveDialog.ShowDialog() == true)
+            {
+                var encoder = new PngBitmapEncoder();
+                encoder.Frames.Add(BitmapFrame.Create(CurrentVideoFrame));
+                using var fileStream = new System.IO.FileStream(saveDialog.FileName, System.IO.FileMode.Create);
+                encoder.Save(fileStream);
+                MessageBox.Show("Frame başarıyla kaydedildi.", "Başarılı", MessageBoxButton.OK, MessageBoxImage.Information);
             }
         }
 
@@ -423,10 +492,7 @@ namespace SatelliteGroundStation.ViewModels
             }
         }
 
-        public void ClearGpsTrack()
-        {
-            _mapService.ClearTrack();
-        }
+        public void ClearGpsTrack() => _mapService.ClearTrack();
 
         private void OnMapError(object? sender, string error)
         {
@@ -435,11 +501,8 @@ namespace SatelliteGroundStation.ViewModels
 
         #endregion
 
-        // Video Event handlers
-        private void OnVideoFrameReceived(object? sender, BitmapSource frame)
-        {
-            CurrentVideoFrame = frame;
-        }
+        // Video events
+        private void OnVideoFrameReceived(object? sender, BitmapSource frame) => CurrentVideoFrame = frame;
 
         private void OnVideoErrorOccurred(object? sender, string error)
         {
@@ -448,6 +511,30 @@ namespace SatelliteGroundStation.ViewModels
         }
 
         #endregion
+
+        // *** YENİ: Simülasyon kontrol ***
+        private void StartSimulation()
+        {
+            _simService.Start();                 // TelemetrySimulatorService içinde Start() olduğunu varsayıyoruz
+            IsSimulationRunning = true;
+            SatelliteStatus = "Simülasyon Aktif";
+        }
+
+        private void StopSimulation()
+        {
+            _simService.Stop();
+            IsSimulationRunning = false;
+            SatelliteStatus = "Bekleniyor";
+        }
+
+        // *** YENİ: Sim satırı geldiğinde parse edip aynı veri hattına akıt ***
+        private void OnSimLineGenerated(object? sender, string line)
+        {
+            var t = _parsingService.ParseTelemetryData(line);
+            if (t != null)
+                Application.Current.Dispatcher.Invoke(() => ProcessTelemetryData(t));
+        }
+
 
         #region Disposal
 
@@ -508,7 +595,7 @@ namespace SatelliteGroundStation.ViewModels
             }
         }
 
-        // Multispektral Filtre Properties
+        // Multispektral Filtre Properties (UI için)
         public string FirstSpectralColor
         {
             get => _firstSpectralColor;
@@ -533,6 +620,8 @@ namespace SatelliteGroundStation.ViewModels
             set => SetProperty(ref _firstColorValue, value);
         }
 
+        // PART 2 OF MainViewModel.cs (fixed)
+
         public string SecondColorValue
         {
             get => _secondColorValue;
@@ -546,7 +635,6 @@ namespace SatelliteGroundStation.ViewModels
             {
                 if (SetProperty(ref _spectralInputCode, value))
                 {
-                    // Kod girildiğinde otomatik olarak renkleri güncelle
                     UpdateSpectralColors(value);
                     CommandManager.InvalidateRequerySuggested();
                 }
@@ -601,116 +689,19 @@ namespace SatelliteGroundStation.ViewModels
             set => SetProperty(ref _gpsLongitude, value);
         }
 
-        public LiveChartsCore.SkiaSharpView.Axis[] XAxes { get; } = new[]
-        {
-            new LiveChartsCore.SkiaSharpView.Axis
-            {
-                Name = "Zaman",
-                LabelsRotation = 0,
-                TextSize = 10,
-                LabelsPaint = new SolidColorPaint(SKColors.LightGray),
-                UnitWidth = TimeSpan.FromMinutes(1).Ticks,
-                MinStep = TimeSpan.FromMinutes(5).Ticks,
-                Labeler = value => new DateTime((long)value).ToString("HH:mm")
-            }
-        };
-
-        public LiveChartsCore.SkiaSharpView.Axis[] YAxes { get; } = new[]
-        {
-            new LiveChartsCore.SkiaSharpView.Axis
-            {
-                TextSize = 10,
-                LabelsPaint = new SolidColorPaint(SKColors.LightGray)
-            }
-        };
-
         // Alarm system status properties
-        public bool Subsystem1Status
-        {
-            get => _subsystem1Status;
-            set => SetProperty(ref _subsystem1Status, value);
-        }
-
-        public bool Subsystem2Status
-        {
-            get => _subsystem2Status;
-            set => SetProperty(ref _subsystem2Status, value);
-        }
-
-        public bool Subsystem3Status
-        {
-            get => _subsystem3Status;
-            set => SetProperty(ref _subsystem3Status, value);
-        }
-
-        public bool Subsystem4Status
-        {
-            get => _subsystem4Status;
-            set => SetProperty(ref _subsystem4Status, value);
-        }
-
-        public bool Subsystem5Status
-        {
-            get => _subsystem5Status;
-            set => SetProperty(ref _subsystem5Status, value);
-        }
-
-        public bool Subsystem6Status
-        {
-            get => _subsystem6Status;
-            set => SetProperty(ref _subsystem6Status, value);
-        }
-
-        // Quick Command Properties
-        public ICommand Quick3g5rCommand => new RelayCommand(async () => await ExecuteQuickCommand("3g5r"));
-        public ICommand Quick2b4nCommand => new RelayCommand(async () => await ExecuteQuickCommand("2b4n"));
-        public ICommand Quick5g2r3bCommand => new RelayCommand(async () => await ExecuteQuickCommand("5g2r3b"));
-        public ICommand Quick10gCommand => new RelayCommand(async () => await ExecuteQuickCommand("10g"));
-        public ICommand QuickTestSequenceCommand => new RelayCommand(async () => await ExecuteQuickCommand("1r1g1b1n"));
-
-        // Quick command execution
-        private async Task ExecuteQuickCommand(string command)
-        {
-            Console.WriteLine($"🚀 Quick command: {command}");
-            CommandCode = command;
-
-            if (TimedFilterService.IsTimedCommand(command))
-            {
-                await _timedFilterService.ExecuteTimedSequenceAsync(command);
-            }
-            else
-            {
-                _serialService.SendCommand(command);
-            }
-
-            CommandCode = "";
-        }
+        public bool Subsystem1Status { get => _subsystem1Status; set => SetProperty(ref _subsystem1Status, value); }
+        public bool Subsystem2Status { get => _subsystem2Status; set => SetProperty(ref _subsystem2Status, value); }
+        public bool Subsystem3Status { get => _subsystem3Status; set => SetProperty(ref _subsystem3Status, value); }
+        public bool Subsystem4Status { get => _subsystem4Status; set => SetProperty(ref _subsystem4Status, value); }
+        public bool Subsystem5Status { get => _subsystem5Status; set => SetProperty(ref _subsystem5Status, value); }
+        public bool Subsystem6Status { get => _subsystem6Status; set => SetProperty(ref _subsystem6Status, value); }
 
         // Video Properties
-        public BitmapSource? CurrentVideoFrame
-        {
-            get => _currentVideoFrame;
-            set => SetProperty(ref _currentVideoFrame, value);
-        }
-
-        public bool IsVideoCapturing
-        {
-            get => _isVideoCapturing;
-            set => SetProperty(ref _isVideoCapturing, value);
-        }
-
-        public VideoDeviceInfo? SelectedVideoDevice
-        {
-            get => _selectedVideoDevice;
-            set => SetProperty(ref _selectedVideoDevice, value);
-        }
-
-        public VideoResolution SelectedVideoResolution
-        {
-            get => _selectedVideoResolution;
-            set => SetProperty(ref _selectedVideoResolution, value);
-        }
-
+        public BitmapSource? CurrentVideoFrame { get => _currentVideoFrame; set => SetProperty(ref _currentVideoFrame, value); }
+        public bool IsVideoCapturing { get => _isVideoCapturing; set => SetProperty(ref _isVideoCapturing, value); }
+        public VideoDeviceInfo? SelectedVideoDevice { get => _selectedVideoDevice; set => SetProperty(ref _selectedVideoDevice, value); }
+        public VideoResolution SelectedVideoResolution { get => _selectedVideoResolution; set => SetProperty(ref _selectedVideoResolution, value); }
         public VideoResolution[] AvailableVideoResolutions { get; } = Enum.GetValues<VideoResolution>();
 
         public FilterData FilterData => _filterService.FilterData;
@@ -723,31 +714,19 @@ namespace SatelliteGroundStation.ViewModels
         {
             try
             {
-                Console.WriteLine($"🔌 Attempting to connect to {SelectedComPort} at {SelectedBaudRate} baud...");
                 _serialService.Connect(SelectedComPort, SelectedBaudRate);
-                Console.WriteLine("✅ Connect method completed successfully");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"❌ Connect failed: {ex.Message}");
                 MessageBox.Show($"Bağlantı hatası: {ex.Message}", "Hata", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
-        private bool CanConnect()
-        {
-            return !IsConnected && !string.IsNullOrEmpty(SelectedComPort);
-        }
+        private bool CanConnect() => !IsConnected && !string.IsNullOrEmpty(SelectedComPort);
 
-        private void Disconnect()
-        {
-            _serialService.Disconnect();
-        }
+        private void Disconnect() => _serialService.Disconnect();
 
-        private void SendManualRelease()
-        {
-            _serialService.SendCommand("RELEASE");
-        }
+        private void SendManualRelease() => _serialService.SendCommand("RELEASE");
 
         private void ExportData()
         {
@@ -781,34 +760,24 @@ namespace SatelliteGroundStation.ViewModels
             }
         }
 
-        // Multispektral Filtre için SendSpectralCode metodu (YENİ: iki haneli sayılarla)
-        private async void SendSpectralCode()
+        private void SendSpectralCode()
         {
-            var code = SpectralInputCode?.Trim();
-
-            if (!string.IsNullOrEmpty(code) && code.Length == 2 && code.All(ch => ch >= '0' && ch <= '3'))
+            if (!string.IsNullOrEmpty(SpectralInputCode) && SpectralInputCode.Length == 2)
             {
-                int r1 = code[0] - '0';
-                int r2 = code[1] - '0';
-
-                // Servis üzerinden iki haneli komut gönder
-                await _filterService.ChangeFilterAsync(r1, r2);
-
-                // UI güncellemeleri
-                ReceivedSpectralData = code;
-                UpdateSpectralColors(code);
+                _serialService.SendCommand($"SPECTRAL:{SpectralInputCode}");
+                ReceivedSpectralData = SpectralInputCode;
+                UpdateSpectralColors(SpectralInputCode);
             }
             else
             {
-                MessageBox.Show("Kod 2 haneli ve her hane 0–3 arasında olmalı (örn: 01, 23, 12).",
-                    "Hata", MessageBoxButton.OK, MessageBoxImage.Warning);
+                MessageBox.Show("Lütfen 2 karakterlik bir kod girin (örn: 01, 23, 12)",
+                               "Hata",
+                               MessageBoxButton.OK,
+                               MessageBoxImage.Warning);
             }
         }
 
-        private void SendFilterCommand(string filter)
-        {
-            _serialService.SendCommand($"FILTER_{filter}");
-        }
+        private void SendFilterCommand(string filter) => _serialService.SendCommand($"FILTER_{filter}");
 
         #endregion
 
@@ -818,19 +787,14 @@ namespace SatelliteGroundStation.ViewModels
         {
             Application.Current.Dispatcher.Invoke(() =>
             {
-                // Spektral ACK (yeni/alternatif protokoller için geriye uyumluluk)
-                if (data.StartsWith("SPECTRAL_ACK:", StringComparison.OrdinalIgnoreCase))
+                if (data.StartsWith("SPECTRAL_ACK:"))
                 {
                     ProcessSpectralData(data);
                 }
                 else
                 {
-                    // Normal telemetri verisi
                     var telemetryData = _parsingService.ParseTelemetryData(data);
-                    if (telemetryData != null)
-                    {
-                        ProcessTelemetryData(telemetryData);
-                    }
+                    if (telemetryData != null) ProcessTelemetryData(telemetryData);
                 }
             });
         }
@@ -844,76 +808,106 @@ namespace SatelliteGroundStation.ViewModels
             });
         }
 
+        // Not: OnSimLineGenerated Part 1'de zaten tanımlı. Tekrarlamamak için burada TANIMLAMADIK.
+
         #endregion
 
         #region Helper Methods
 
-        private void ProcessTelemetryData(TelemetryData telemetryData)
+        private void ProcessTelemetryData(TelemetryData t)
         {
-            _currentTelemetry = telemetryData;
+            _currentTelemetry = t;
 
             // Update current values
-            CurrentTemperature = telemetryData.Temperature;
-            CurrentPressure = telemetryData.Pressure;
-            CurrentAltitude = telemetryData.Altitude;
-            CurrentSpeed = telemetryData.Speed;
-            BatteryPercentage = telemetryData.BatteryPercentage;
-            GpsLatitude = telemetryData.GpsLatitude;
-            GpsLongitude = telemetryData.GpsLongitude;
+            CurrentTemperature = t.Temperature;
+            CurrentPressure = t.Pressure;
+            CurrentAltitude = t.Altitude;
+            CurrentSpeed = t.Speed;
+            BatteryPercentage = t.BatteryPercentage;
+            GpsLatitude = t.GpsLatitude;
+            GpsLongitude = t.GpsLongitude;
 
             // Add to collections
-            TelemetryDataCollection.Insert(0, telemetryData);
+            TelemetryDataCollection.Insert(0, t);
 
-            // Add to chart data (keep last 100 points)
+            // Add to chart data (keep last 200 points)
             var now = DateTime.Now;
-            TemperatureData.Add(new DataPoint(now, telemetryData.Temperature));
-            PressureData.Add(new DataPoint(now, telemetryData.Pressure));
-            SpeedData.Add(new DataPoint(now, telemetryData.Speed));
-            BatteryVoltageData.Add(new DataPoint(now, telemetryData.BatteryVoltage));
-            GyroXData.Add(new DataPoint(now, telemetryData.GyroX));
-            GyroYData.Add(new DataPoint(now, telemetryData.GyroY));
-            GyroZData.Add(new DataPoint(now, telemetryData.GyroZ));
+            TemperatureData.Add(new DataPoint(now, t.Temperature));
+            PressureData.Add(new DataPoint(now, t.Pressure));
+            SpeedData.Add(new DataPoint(now, t.Speed));
+            BatteryVoltageData.Add(new DataPoint(now, t.BatteryVoltage));
+            GyroXData.Add(new DataPoint(now, t.GyroX));
+            GyroYData.Add(new DataPoint(now, t.GyroY));
+            GyroZData.Add(new DataPoint(now, t.GyroZ));
 
-            // Keep only last 100 points for performance
-            if (TemperatureData.Count > 100) TemperatureData.RemoveAt(0);
-            if (PressureData.Count > 100) PressureData.RemoveAt(0);
-            if (SpeedData.Count > 100) SpeedData.RemoveAt(0);
-            if (BatteryVoltageData.Count > 100) BatteryVoltageData.RemoveAt(0);
-            if (GyroXData.Count > 100) GyroXData.RemoveAt(0);
-            if (GyroYData.Count > 100) GyroYData.RemoveAt(0);
-            if (GyroZData.Count > 100) GyroZData.RemoveAt(0);
+            if (TemperatureData.Count > 200) TemperatureData.RemoveAt(0);
+            if (PressureData.Count > 200) PressureData.RemoveAt(0);
+            if (SpeedData.Count > 200) SpeedData.RemoveAt(0);
+            if (BatteryVoltageData.Count > 200) BatteryVoltageData.RemoveAt(0);
+            if (GyroXData.Count > 200) GyroXData.RemoveAt(0);
+            if (GyroYData.Count > 200) GyroYData.RemoveAt(0);
+            if (GyroZData.Count > 200) GyroZData.RemoveAt(0);
 
-            // Limit telemetry data collection
             if (TelemetryDataCollection.Count > 1000)
                 TelemetryDataCollection.RemoveAt(TelemetryDataCollection.Count - 1);
 
-            if (_isMapInitialized && telemetryData.GpsLatitude != 0 && telemetryData.GpsLongitude != 0)
+            // Harita
+            if (_isMapInitialized && t.GpsLatitude != 0 && t.GpsLongitude != 0)
             {
                 _ = Task.Run(async () =>
                 {
-                    try
-                    {
-                        await _mapService.UpdateGpsLocationAsync(
-                            telemetryData.GpsLatitude,
-                            telemetryData.GpsLongitude,
-                            telemetryData.Altitude);
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"GPS update error: {ex.Message}");
-                    }
+                    try { await _mapService.UpdateGpsLocationAsync(t.GpsLatitude, t.GpsLongitude, t.Altitude); }
+                    catch { }
                 });
             }
 
             SatelliteStatus = "Veri Alınıyor";
+
+            // ---- Stabilize Y axes ----
+            _tempRange.Add(t.Temperature);
+            _presRange.Add(t.Pressure);
+            _speedRange.Add(t.Speed);
+            _battRange.Add(t.BatteryVoltage);
+            _gyroRange.Add(t.GyroX);
+            _gyroRange.Add(t.GyroY);
+            _gyroRange.Add(t.GyroZ);
+
+            if (!UseFixedAxes)
+            {
+                if (!double.IsNaN(_tempRange.Min))
+                {
+                    TemperatureYAxes[0].MinLimit = _tempRange.Min;
+                    TemperatureYAxes[0].MaxLimit = _tempRange.Max;
+                }
+                if (!double.IsNaN(_presRange.Min))
+                {
+                    PressureYAxes[0].MinLimit = _presRange.Min;
+                    PressureYAxes[0].MaxLimit = _presRange.Max;
+                }
+                if (!double.IsNaN(_speedRange.Min))
+                {
+                    SpeedYAxes[0].MinLimit = _speedRange.Min;
+                    SpeedYAxes[0].MaxLimit = _speedRange.Max;
+                }
+                if (!double.IsNaN(_battRange.Min))
+                {
+                    BatteryYAxes[0].MinLimit = _battRange.Min;
+                    BatteryYAxes[0].MaxLimit = _battRange.Max;
+                }
+                if (!double.IsNaN(_gyroRange.Min))
+                {
+                    AxisYAxes[0].MinLimit = _gyroRange.Min;
+                    AxisYAxes[0].MaxLimit = _gyroRange.Max;
+                }
+            }
         }
 
         // Spektral veri işleme
         private void ProcessSpectralData(string data)
         {
-            if (data.StartsWith("SPECTRAL_ACK:", StringComparison.OrdinalIgnoreCase))
+            if (data.StartsWith("SPECTRAL_ACK:"))
             {
-                string code = data.Substring(13).Trim();
+                string code = data.Substring(13);
                 ReceivedSpectralData = code;
                 UpdateSpectralColors(code);
             }
@@ -935,33 +929,8 @@ namespace SatelliteGroundStation.ViewModels
             MixedSpectralColor = CalculateMixedColor(firstChar, secondChar);
         }
 
-        // Önizleme (sadece görsel)
-        private void PreviewSpectralColors(string code)
-        {
-            if (string.IsNullOrEmpty(code) || code.Length != 2)
-            {
-                FirstColorValue = "";
-                SecondColorValue = "";
-                FirstSpectralColor = "Gray";
-                SecondSpectralColor = "Gray";
-                MixedSpectralColor = "Gray";
-                return;
-            }
-
-            char firstChar = code[0];
-            FirstColorValue = firstChar.ToString();
-            FirstSpectralColor = GetColorFromCode(firstChar);
-
-            char secondChar = code[1];
-            SecondColorValue = secondChar.ToString();
-            SecondSpectralColor = GetColorFromCode(secondChar);
-
-            MixedSpectralColor = CalculateMixedColor(firstChar, secondChar);
-        }
-
-        private string GetColorFromCode(char code)
-        {
-            return code switch
+        private string GetColorFromCode(char code) =>
+            code switch
             {
                 '0' => "Transparent",
                 '1' => "Red",
@@ -969,7 +938,6 @@ namespace SatelliteGroundStation.ViewModels
                 '3' => "Blue",
                 _ => "Gray"
             };
-        }
 
         private string CalculateMixedColor(char code1, char code2)
         {
@@ -981,9 +949,9 @@ namespace SatelliteGroundStation.ViewModels
             string combination = new string(new[] { code1, code2 }.OrderBy(c => c).ToArray());
             return combination switch
             {
-                "12" => "#FF8800", // turuncu
-                "13" => "#FF00FF", // magenta
-                "23" => "#00FFFF", // cyan
+                "12" => "#FF8800", // Turuncu
+                "13" => "#FF00FF", // Magenta
+                "23" => "#00FFFF", // Cyan
                 _ => "Purple"
             };
         }
@@ -1005,16 +973,16 @@ namespace SatelliteGroundStation.ViewModels
                 {
                     PacketNumber = i + 1,
                     Timestamp = DateTime.Now.AddSeconds(-i * 5),
-                    Temperature = 20 + random.NextDouble() * 10,
-                    Pressure = 1013 + random.NextDouble() * 100,
-                    Altitude = 1000 + random.NextDouble() * 500,
-                    Speed = random.NextDouble() * 50,
-                    BatteryVoltage = 3.7 + random.NextDouble() * 0.5,
+                    Temperature = 22 + random.NextDouble() * 3, // 22..25
+                    Pressure = 1000 + random.NextDouble() * 20, // 1000..1020 hPa
+                    Altitude = 1000 + random.NextDouble() * 50,
+                    Speed = random.NextDouble() * 8,
+                    BatteryVoltage = 3.7 + random.NextDouble() * 0.3,
                     GpsLatitude = 39.9334 + (random.NextDouble() - 0.5) * 0.01,
                     GpsLongitude = 32.8597 + (random.NextDouble() - 0.5) * 0.01,
-                    GyroX = (random.NextDouble() - 0.5) * 100,
-                    GyroY = (random.NextDouble() - 0.5) * 100,
-                    GyroZ = (random.NextDouble() - 0.5) * 100
+                    GyroX = (random.NextDouble() - 0.5) * 10,
+                    GyroY = (random.NextDouble() - 0.5) * 10,
+                    GyroZ = (random.NextDouble() - 0.5) * 10
                 };
 
                 ProcessTelemetryData(sampleData);
@@ -1023,30 +991,94 @@ namespace SatelliteGroundStation.ViewModels
 
         private void TestFormat2Parsing()
         {
-            string testData = "$DATA,12345,25.5,1013.2,1500.0,45.2,3.85,12.5,-8.3,15.7";
+            string testData = "$DATA,12345,25.5,1013.2,1500.0,4.2,3.85,12.5,-8.3,15.7";
             var result = _parsingService.ParseTelemetryData(testData);
             if (result != null) ProcessTelemetryData(result);
+        }
+
+        // ---- SABİT/DİNAMİK EKSEN UYGULAMA ----
+        private void ApplyAxisMode()
+        {
+            if (UseFixedAxes) SetFixedAxes();
+            else ClearFixedAxes();
+        }
+
+        private void SetFixedAxes()
+        {
+            TemperatureYAxes[0].MinLimit = _axisTemp.min;
+            TemperatureYAxes[0].MaxLimit = _axisTemp.max;
+
+            PressureYAxes[0].MinLimit = _axisPres.min;
+            PressureYAxes[0].MaxLimit = _axisPres.max;
+
+            SpeedYAxes[0].MinLimit = _axisSpeed.min;
+            SpeedYAxes[0].MaxLimit = _axisSpeed.max;
+
+            BatteryYAxes[0].MinLimit = _axisBatt.min;
+            BatteryYAxes[0].MaxLimit = _axisBatt.max;
+
+            AxisYAxes[0].MinLimit = _axisGyro.min;
+            AxisYAxes[0].MaxLimit = _axisGyro.max;
+        }
+
+        private void ClearFixedAxes()
+        {
+            TemperatureYAxes[0].MinLimit = null;
+            TemperatureYAxes[0].MaxLimit = null;
+
+            PressureYAxes[0].MinLimit = null;
+            PressureYAxes[0].MaxLimit = null;
+
+            SpeedYAxes[0].MinLimit = null;
+            SpeedYAxes[0].MaxLimit = null;
+
+            BatteryYAxes[0].MinLimit = null;
+            BatteryYAxes[0].MaxLimit = null;
+
+            AxisYAxes[0].MinLimit = null;
+            AxisYAxes[0].MaxLimit = null;
         }
 
         #endregion
 
         #region Filter Event Handlers
 
-        private void OnFilterStateChanged(object? sender, string filterCode)
-        {
-            Console.WriteLine($"🎯 UI: Filter changed to {filterCode}");
-        }
-
-        private void OnFilterCommandSentEvent(object? sender, string command)
-        {
-            Console.WriteLine($"📤 UI: Filter command sent: {command}");
-        }
-
-        private void OnFilterErrorEvent(object? sender, string error)
-        {
-            Console.WriteLine($"❌ UI: Filter error: {error}");
-        }
+        private void OnFilterStateChanged(object? sender, string filterCode) { }
+        private void OnFilterCommandSentEvent(object? sender, string command) { }
+        private void OnFilterErrorEvent(object? sender, string error) { }
 
         #endregion
+
+        // ---- Basit yuvarlanan min-max penceresi ----
+        private sealed class RollingRange
+        {
+            private readonly int _capacity;
+            private readonly double _pad;
+            private readonly System.Collections.Generic.Queue<double> _q = new();
+
+            public double Min { get; private set; } = double.NaN;
+            public double Max { get; private set; } = double.NaN;
+
+            // capacity: kaç örnek tutulacak; pad: min-max’a yüzde pay (0.08 => %8)
+            public RollingRange(int capacity, double pad = 0.05)
+            {
+                _capacity = Math.Max(8, capacity);
+                _pad = Math.Max(0.0, pad);
+            }
+
+            public void Add(double v)
+            {
+                _q.Enqueue(v);
+                if (_q.Count > _capacity) _q.Dequeue();
+
+                var min = _q.Min();
+                var max = _q.Max();
+                var span = Math.Max(1e-6, max - min);
+                var padAbs = span * _pad;
+
+                Min = min - padAbs;
+                Max = max + padAbs;
+            }
+        }
     }
 }
