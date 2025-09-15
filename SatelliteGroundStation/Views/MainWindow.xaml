@@ -186,14 +186,14 @@
 
     <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
             <!-- Header -->
-            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
             <!-- Main content -->
-            <RowDefinition Height="300"/>
+            <RowDefinition Height="*"/>
             <!-- Charts -->
-            <RowDefinition Height="150"/>
+            <RowDefinition Height="300"/>
             <!-- Data grid -->
+            <RowDefinition Height="150"/>
         </Grid.RowDefinitions>
 
         <!-- Header Section -->
@@ -211,149 +211,143 @@
                     <Image Source="/Images/hidlogo.png" Width="60" Height="60" Margin="10,0"/>
                 </StackPanel>
 
-                <!-- Control Panel -->
-                <Grid Grid.Column="1">
+                <!-- CONTROL PANEL (sabit yerleşim) -->
+                <Grid Grid.Column="1" Margin="0,4,0,0">
+                    <!-- 2 satır: 0=üst (filtre + 3 buton + portlar), 1=alt (Uydu/Bağlantı + simülasyon) -->
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
+                    <!-- 5 sütun: filtre | spacer | 3 buton | spacer | sağ blok -->
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
 
-                    <!-- Üst satır (sağa toplanmış) -->
-                    <WrapPanel Grid.Row="0" FlowDirection="RightToLeft" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,8,0">
-
-                        <!-- Sağ uç: Bağlantı + Simülasyon (biraz aşağı kaydırıldı) -->
-                        <StackPanel Orientation="Vertical"
-                                    Margin="8,8,0,0"
-                                    FlowDirection="LeftToRight"
-                                    VerticalAlignment="Center">
-
-                            <!-- Port / Baud / Bağlan / Kes -->
-                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                <ComboBox ItemsSource="{Binding AvailableComPorts}"
-                                          SelectedItem="{Binding SelectedComPort}"
-                                          Width="90" Margin="0,0,6,0"
-                                          Style="{StaticResource RectangularComboBoxStyle}"
-                                          VerticalAlignment="Center"/>
-                                <ComboBox ItemsSource="{Binding AvailableBaudRates}"
-                                          SelectedItem="{Binding SelectedBaudRate}"
-                                          Width="90" Margin="0,0,6,0"
-                                          Style="{StaticResource RectangularComboBoxStyle}"
-                                          VerticalAlignment="Center"/>
-                                <Button Content="Bağlan"
-                                        Command="{Binding ConnectCommand}"
-                                        Style="{StaticResource CommandButtonStyle}"
-                                        Margin="0,0,4,0"
-                                        VerticalAlignment="Center"/>
-                                <Button Content="Kes"
-                                        Command="{Binding DisconnectCommand}"
-                                        Style="{StaticResource CommandButtonStyle}"
-                                        VerticalAlignment="Center"/>
-                            </StackPanel>
-
-                            <!-- Simülasyon butonları (alt satır, aşağıda) -->
-                            <StackPanel Orientation="Horizontal" Margin="0,6,0,0" VerticalAlignment="Center">
-                                <Button Content="Simülasyonu Başlat"
-                                        Command="{Binding StartSimulationCommand}"
-                                        Style="{StaticResource CommandButtonStyle}"
-                                        VerticalAlignment="Center"/>
-                                <Button Content="Simülasyonu Durdur"
-                                        Command="{Binding StopSimulationCommand}"
-                                        Style="{StaticResource CommandButtonStyle}"
-                                        VerticalAlignment="Center"/>
-                            </StackPanel>
-                        </StackPanel>
-
-                        <!-- Durum Göstergeleri -->
-                        <StackPanel Orientation="Horizontal" Margin="12,0,0,0" VerticalAlignment="Center" FlowDirection="LeftToRight">
-                            <TextBlock Text="{Binding SatelliteStatus, StringFormat='Uydu: {0}'}" Style="{StaticResource StatusStyle}" FontSize="10"/>
-                            <TextBlock Text="{Binding ConnectionStatus, StringFormat='Bağlantı: {0}'}" Style="{StaticResource StatusStyle}" FontSize="10" Margin="15,0,0,0"/>
-                        </StackPanel>
-
-                        <!-- Komut Butonları (soldaki butonlarla hizalı kalsın) -->
-                        <StackPanel Orientation="Horizontal" Margin="6,0" FlowDirection="LeftToRight" VerticalAlignment="Center">
-                            <Button Content="Manuel Bırakma" Style="{StaticResource CommandButtonStyle}" Command="{Binding ManualReleaseCommand}"/>
-                            <Button Content="Excel Formatında Dışa Aktar" Style="{StaticResource CommandButtonStyle}" Command="{Binding ExportDataCommand}"/>
-                            <Button Content="Telemetri Formatı Başlat" Style="{StaticResource CommandButtonStyle}" Command="{Binding StartTelemetryCommand}"/>
-                        </StackPanel>
-
-                        <!-- Multispektral Filtre -->
-                        <GroupBox Header="Multispektral Filtre" Foreground="White" Margin="8,0,6,0"
-                                  MinWidth="360" MinHeight="50" Background="#FF404040" BorderBrush="LightGray" BorderThickness="1"
-                                  FlowDirection="LeftToRight">
-                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="5">
-                                <!-- Renk Kutucukları -->
-                                <StackPanel Orientation="Horizontal" Margin="5,0">
-                                    <StackPanel Margin="3,2">
-                                        <TextBlock Text="Renk 1" Foreground="White" FontSize="9" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,3"/>
-                                        <Border Width="40" Height="30" BorderThickness="2" BorderBrush="White" CornerRadius="3" Background="{Binding FirstSpectralColor}">
-                                            <TextBlock Text="{Binding FirstColorValue}" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="14" FontWeight="Bold"/>
-                                        </Border>
-                                    </StackPanel>
-                                    <TextBlock Text="+" Foreground="White" FontSize="16" FontWeight="Bold" VerticalAlignment="Center" Margin="8,12,8,0"/>
-                                    <StackPanel Margin="3,2">
-                                        <TextBlock Text="Renk 2" Foreground="White" FontSize="9" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,3"/>
-                                        <Border Width="40" Height="30" BorderThickness="2" BorderBrush="White" CornerRadius="3" Background="{Binding SecondSpectralColor}">
-                                            <TextBlock Text="{Binding SecondColorValue}" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="14" FontWeight="Bold"/>
-                                        </Border>
-                                    </StackPanel>
-                                    <TextBlock Text="=" Foreground="White" FontSize="16" FontWeight="Bold" VerticalAlignment="Center" Margin="8,12,8,0"/>
-                                    <StackPanel Margin="3,2">
-                                        <TextBlock Text="Karışım" Foreground="White" FontSize="9" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,3"/>
-                                        <Border Width="40" Height="30" BorderThickness="2" BorderBrush="White" CornerRadius="3" Background="{Binding MixedSpectralColor}"/>
-                                    </StackPanel>
+                    <!-- SOL: Multispektral Filtre (üst satır) -->
+                    <GroupBox Grid.Row="0" Grid.Column="0"
+                              Header="Multispektral Filtre" Foreground="White" Margin="8,0,6,0"
+                              MinWidth="360" MinHeight="50" Background="#FF404040" BorderBrush="LightGray" BorderThickness="1">
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="5">
+                            <!-- Renk Kutucukları -->
+                            <StackPanel Orientation="Horizontal" Margin="5,0">
+                                <StackPanel Margin="3,2">
+                                    <TextBlock Text="Renk 1" Foreground="White" FontSize="9" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,3"/>
+                                    <Border Width="40" Height="30" BorderThickness="2" BorderBrush="White" CornerRadius="3" Background="{Binding FirstSpectralColor}">
+                                        <TextBlock Text="{Binding FirstColorValue}" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="14" FontWeight="Bold"/>
+                                    </Border>
                                 </StackPanel>
-
-                                <!-- Seçiciler + Kod + Gönder -->
-                                <StackPanel Orientation="Horizontal" Margin="15,0,0,0">
-                                    <!-- Renk1 seçici -->
-                                    <StackPanel Margin="5,2">
-                                        <TextBlock Text="Renk 1 (0-3)" Foreground="White" FontSize="9" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,3"/>
-                                        <ComboBox Width="50" Height="25" SelectedValue="{Binding Renk1, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                  Style="{StaticResource RectangularComboBoxStyle}">
-                                            <ComboBoxItem Content="0"/>
-                                            <ComboBoxItem Content="1"/>
-                                            <ComboBoxItem Content="2"/>
-                                            <ComboBoxItem Content="3"/>
-                                        </ComboBox>
-                                    </StackPanel>
-
-                                    <!-- Renk2 seçici -->
-                                    <StackPanel Margin="5,2">
-                                        <TextBlock Text="Renk 2 (0-3)" Foreground="White" FontSize="9" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,3"/>
-                                        <ComboBox Width="50" Height="25" SelectedValue="{Binding Renk2, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                  Style="{StaticResource RectangularComboBoxStyle}">
-                                            <ComboBoxItem Content="0"/>
-                                            <ComboBoxItem Content="1"/>
-                                            <ComboBoxItem Content="2"/>
-                                            <ComboBoxItem Content="3"/>
-                                        </ComboBox>
-                                    </StackPanel>
-
-                                    <!-- Kod kutusu -->
-                                    <StackPanel Margin="5,2">
-                                        <TextBlock Text="Kod" Foreground="White" FontSize="9" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,3"/>
-                                        <TextBox x:Name="SpectralInput"
-                                                 Width="45" Height="25"
-                                                 Text="{Binding SpectralInputCode, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                 MaxLength="2" FontFamily="Consolas" FontSize="12" FontWeight="Bold"
-                                                 HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
-                                                 Background="White" Foreground="Black" BorderBrush="DarkGray" BorderThickness="1"
-                                                 ToolTip="0=Şeffaf, 1=Kırmızı, 2=Yeşil, 3=Mavi"/>
-                                    </StackPanel>
-
-                                    <!-- Gönder -->
-                                    <Button Content="Gönder"
-                                            Command="{Binding SendSpectralCodeCommand}"
-                                            Width="60" Height="25" Margin="6,17,0,0" Padding="3,1"
-                                            ToolTip="Seçili iki haneli kodu Arduino'ya gönderir"/>
+                                <TextBlock Text="+" Foreground="White" FontSize="16" FontWeight="Bold" VerticalAlignment="Center" Margin="8,12,8,0"/>
+                                <StackPanel Margin="3,2">
+                                    <TextBlock Text="Renk 2" Foreground="White" FontSize="9" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,3"/>
+                                    <Border Width="40" Height="30" BorderThickness="2" BorderBrush="White" CornerRadius="3" Background="{Binding SecondSpectralColor}">
+                                        <TextBlock Text="{Binding SecondColorValue}" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="14" FontWeight="Bold"/>
+                                    </Border>
+                                </StackPanel>
+                                <TextBlock Text="=" Foreground="White" FontSize="16" FontWeight="Bold" VerticalAlignment="Center" Margin="8,12,8,0"/>
+                                <StackPanel Margin="3,2">
+                                    <TextBlock Text="Karışım" Foreground="White" FontSize="9" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,3"/>
+                                    <Border Width="40" Height="30" BorderThickness="2" BorderBrush="White" CornerRadius="3" Background="{Binding MixedSpectralColor}"/>
                                 </StackPanel>
                             </StackPanel>
-                        </GroupBox>
-                    </WrapPanel>
 
-                    <!-- Alt satır: bilgi -->
-                    <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
-                        <TextBlock Text="{Binding ReceivedSpectralData, StringFormat='Alınan: {0}'}" Style="{StaticResource StatusStyle}" Margin="10,0" Foreground="LightGreen"/>
+                            <!-- Seçiciler + Kod + Gönder -->
+                            <StackPanel Orientation="Horizontal" Margin="15,0,0,0">
+                                <!-- Renk1 seçici -->
+                                <StackPanel Margin="5,2">
+                                    <TextBlock Text="Renk 1 (0-3)" Foreground="White" FontSize="9" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,3"/>
+                                    <ComboBox Width="50" Height="25" SelectedValue="{Binding Renk1, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                              Style="{StaticResource RectangularComboBoxStyle}">
+                                        <ComboBoxItem Content="0"/>
+                                        <ComboBoxItem Content="1"/>
+                                        <ComboBoxItem Content="2"/>
+                                        <ComboBoxItem Content="3"/>
+                                    </ComboBox>
+                                </StackPanel>
+
+                                <!-- Renk2 seçici -->
+                                <StackPanel Margin="5,2">
+                                    <TextBlock Text="Renk 2 (0-3)" Foreground="White" FontSize="9" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,3"/>
+                                    <ComboBox Width="50" Height="25" SelectedValue="{Binding Renk2, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                              Style="{StaticResource RectangularComboBoxStyle}">
+                                        <ComboBoxItem Content="0"/>
+                                        <ComboBoxItem Content="1"/>
+                                        <ComboBoxItem Content="2"/>
+                                        <ComboBoxItem Content="3"/>
+                                    </ComboBox>
+                                </StackPanel>
+
+                                <!-- Kod kutusu -->
+                                <StackPanel Margin="5,2">
+                                    <TextBlock Text="Kod" Foreground="White" FontSize="9" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,3"/>
+                                    <TextBox x:Name="SpectralInput"
+                                             Width="45" Height="25"
+                                             Text="{Binding SpectralInputCode, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                             MaxLength="2" FontFamily="Consolas" FontSize="12" FontWeight="Bold"
+                                             HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                                             Background="White" Foreground="Black" BorderBrush="DarkGray" BorderThickness="1"
+                                             ToolTip="0=Şeffaf, 1=Kırmızı, 2=Yeşil, 3=Mavi"/>
+                                </StackPanel>
+
+                                <!-- Gönder -->
+                                <Button Content="Gönder"
+                                        Command="{Binding SendSpectralCodeCommand}"
+                                        Width="60" Height="25" Margin="6,17,0,0" Padding="3,1"
+                                        ToolTip="Seçili iki haneli kodu Arduino'ya gönderir"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </GroupBox>
+
+                    <!-- ORTA: 3 BUTON (üst satır) -->
+                    <StackPanel Grid.Row="0" Grid.Column="2"
+                                Orientation="Horizontal"
+                                VerticalAlignment="Top"
+                                Margin="0,18,0,0">
+                        <Button Content="Manuel Bırakma" Style="{StaticResource CommandButtonStyle}"
+                                Command="{Binding ManualReleaseCommand}" Margin="0,0,6,0"/>
+                        <Button Content="Excel Formatında Dışa Aktar" Style="{StaticResource CommandButtonStyle}"
+                                Command="{Binding ExportDataCommand}" Margin="0,0,6,0"/>
+                        <Button Content="Telemetri Formatı Başlat" Style="{StaticResource CommandButtonStyle}"
+                                Command="{Binding StartTelemetryCommand}"/>
+                    </StackPanel>
+
+                    <!-- SAĞ ÜST: Port/Baud + Bağlan/Kes (üst satır) -->
+                    <StackPanel Grid.Row="0" Grid.Column="4"
+                                Orientation="Horizontal"
+                                VerticalAlignment="Top"
+                                Margin="0,18,0,0">
+                        <ComboBox ItemsSource="{Binding AvailableComPorts}" SelectedItem="{Binding SelectedComPort}"
+                                  Width="110" Margin="0,0,6,0" Style="{StaticResource RectangularComboBoxStyle}"/>
+                        <ComboBox ItemsSource="{Binding AvailableBaudRates}" SelectedItem="{Binding SelectedBaudRate}"
+                                  Width="110" Margin="0,0,6,0" Style="{StaticResource RectangularComboBoxStyle}"/>
+                        <Button Content="Bağlan" Command="{Binding ConnectCommand}" Style="{StaticResource CommandButtonStyle}" Margin="0,0,6,0"/>
+                        <Button Content="Kes" Command="{Binding DisconnectCommand}" Style="{StaticResource CommandButtonStyle}"/>
+                    </StackPanel>
+
+                    <!-- ALT SATIR: Uydu/Bağlantı (ortada) -->
+                    <StackPanel Grid.Row="1" Grid.ColumnSpan="4"
+                                Orientation="Horizontal"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                Margin="0,6,0,0">
+                        <TextBlock Text="{Binding SatelliteStatus, StringFormat='Uydu: {0}'}"
+                                   Style="{StaticResource StatusStyle}" FontSize="10"/>
+                        <TextBlock Text="{Binding ConnectionStatus, StringFormat='Bağlantı: {0}'}"
+                                   Style="{StaticResource StatusStyle}" FontSize="10" Margin="15,0,0,0"/>
+                    </StackPanel>
+
+                    <!-- ALT SAĞ: Simülasyon butonları -->
+                    <StackPanel Grid.Row="1" Grid.Column="4"
+                                Orientation="Horizontal"
+                                HorizontalAlignment="Left"
+                                VerticalAlignment="Center">
+                        <Button Content="Simülasyonu Başlat" Command="{Binding StartSimulationCommand}"
+                                Style="{StaticResource CommandButtonStyle}" Margin="0,0,6,0"/>
+                        <Button Content="Simülasyonu Durdur" Command="{Binding StopSimulationCommand}"
+                                Style="{StaticResource CommandButtonStyle}"/>
                     </StackPanel>
                 </Grid>
 
@@ -485,44 +479,42 @@
 
             <GroupBox Grid.Column="0" Header="Sıcaklık Grafiği" Foreground="White" Margin="2">
                 <lvc:CartesianChart Series="{Binding TemperatureSeries}"
-                    XAxes="{Binding XAxes}"
-                    YAxes="{Binding TemperatureYAxes}"
-                    Background="Black"
-                    AnimationsSpeed="00:00:00.100"/>
+                                    XAxes="{Binding XAxes}"
+                                    YAxes="{Binding TemperatureYAxes}"
+                                    Background="Black"
+                                    AnimationsSpeed="00:00:00.100"/>
             </GroupBox>
 
             <GroupBox Grid.Column="1" Header="Basınç Grafiği" Foreground="White" Margin="2">
                 <lvc:CartesianChart Series="{Binding PressureSeries}"
-                    XAxes="{Binding XAxes}"
-                    YAxes="{Binding PressureYAxes}"
-                    Background="Black"
-                    AnimationsSpeed="00:00:00.100"/>
+                                    XAxes="{Binding XAxes}"
+                                    YAxes="{Binding PressureYAxes}"
+                                    Background="Black"
+                                    AnimationsSpeed="00:00:00.100"/>
             </GroupBox>
 
             <GroupBox Grid.Column="2" Header="Hız Grafiği" Foreground="White" Margin="2">
                 <lvc:CartesianChart Series="{Binding SpeedSeries}"
-                    XAxes="{Binding XAxes}"
-                    YAxes="{Binding SpeedYAxes}"
-                    Background="Black"
-                    AnimationsSpeed="00:00:00.100"/>
-
+                                    XAxes="{Binding XAxes}"
+                                    YAxes="{Binding SpeedYAxes}"
+                                    Background="Black"
+                                    AnimationsSpeed="00:00:00.100"/>
             </GroupBox>
 
             <GroupBox Grid.Column="3" Header="Pil Gerilimi Grafiği" Foreground="White" Margin="2">
                 <lvc:CartesianChart Series="{Binding BatteryVoltageSeries}"
-                    XAxes="{Binding XAxes}"
-                    YAxes="{Binding BatteryYAxes}"
-                    Background="Black"
-                    AnimationsSpeed="00:00:00.100"/>
+                                    XAxes="{Binding XAxes}"
+                                    YAxes="{Binding BatteryYAxes}"
+                                    Background="Black"
+                                    AnimationsSpeed="00:00:00.100"/>
             </GroupBox>
 
             <GroupBox Grid.Column="4" Header="Eksen Verileri Grafiği" Foreground="White" Margin="2">
                 <lvc:CartesianChart Series="{Binding AxisDataSeries}"
-                    XAxes="{Binding XAxes}"
-                    YAxes="{Binding AxisYAxes}"
-                    Background="Black"
-                    AnimationsSpeed="00:00:00.100"/>
-
+                                    XAxes="{Binding XAxes}"
+                                    YAxes="{Binding AxisYAxes}"
+                                    Background="Black"
+                                    AnimationsSpeed="00:00:00.100"/>
             </GroupBox>
         </Grid>
 
